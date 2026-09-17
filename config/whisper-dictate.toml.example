@@ -1,5 +1,5 @@
 # tabelawhisper configuration
-# Copy to ~/.config/tabela/whisper-dictate/config.toml and edit.
+# Copy to ~/.config/tabelha/whisper-dictate/config.toml and edit.
 
 model = "small"           # base | small | medium | large-v3 (bigger = more accurate, slower)
 language = "auto"          # auto detects pt/en mixed per segment; or pin "pt"/"en"

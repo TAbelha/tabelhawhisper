@@ -1097,8 +1097,8 @@ wheels = [
 ]
 
 [[package]]
-name = "tabelawhisper"
-version = "1.0.0"
+name = "tabelhawhisper"
+version = "1.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "faster-whisper" },

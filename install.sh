@@ -4,9 +4,17 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")" && pwd)"
 NIRI_SCRIPTS="$HOME/.config/niri/scripts"
 DMS_PLUGINS="$HOME/.config/DankMaterialShell/plugins"
-CFG_DIR="$HOME/.config/tabela/whisper-dictate"
+CFG_DIR="$HOME/.config/tabelha/whisper-dictate"
+OLD_CFG_DIR="$HOME/.config/tabela/whisper-dictate"
 
 echo "==> tabelhawhisper installer"
+
+# Migrate config from old dir (tabela) to new dir (tabelha) if needed
+if [ ! -f "$CFG_DIR/config.toml" ] && [ -f "$OLD_CFG_DIR/config.toml" ]; then
+    mkdir -p "$CFG_DIR"
+    cp "$OLD_CFG_DIR/config.toml" "$CFG_DIR/config.toml"
+    echo "    migrated config from $OLD_CFG_DIR to $CFG_DIR"
+fi
 
 echo "==> syncing uv environment (downloads torch on first run, may take a while)"
 ( cd "$REPO" && uv sync --all-groups )
