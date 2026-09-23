@@ -372,21 +372,36 @@ PluginComponent {
 
                 // Wave bars
                 Row {
+                    id: waveRow
                     spacing: 2
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 30
+                    Layout.alignment: Qt.AlignVCenter
+
+                    readonly property int barCount: Math.max(1, Math.floor((width + spacing) / (3 + spacing)))
+
                     Repeater {
-                        model: Math.min(root.levels.length, 16)
-                        Rectangle {
+                        model: waveRow.barCount
+                        Item {
                             width: 3
-                            color: Theme.primary
-                            property real barLevel: root.levels[root.levels.length - 1 - index] || 0
-                            height: Math.max(2, barLevel * 30)
-                            Behavior on height { NumberAnimation { duration: 80 } }
+                            height: waveRow.height
+                            Rectangle {
+                                width: parent.width
+                                anchors.bottom: parent.bottom
+                                color: Theme.primary
+                                property real barLevel: {
+                                    var n = root.levels.length;
+                                    var idx = n - waveRow.barCount + index;
+                                    return (idx >= 0 && idx < n) ? (root.levels[idx] || 0) : 0;
+                                }
+                                height: Math.max(2, barLevel * parent.height)
+                                Behavior on height { NumberAnimation { duration: 80 } }
+                            }
                         }
                     }
                 }
 
-                Item { Layout.fillWidth: true }
+                Item { Layout.fillWidth: false; width: 8 }
 
                 // Pause/Resume button
                 Rectangle {
