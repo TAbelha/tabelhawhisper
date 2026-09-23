@@ -11,6 +11,7 @@ import qs.Modules.Plugins
 PluginComponent {
     id: root
     pluginId: "whisperDictate"
+    layerNamespacePlugin: "whisperDictate"
 
     // --- State ---
     property bool isRecording: false
@@ -27,14 +28,19 @@ PluginComponent {
     property bool pillDragging: false
     property real pillDragStartMouseX: 0
     property real pillDragStartMouseY: 0
+    property real pillDragStartPillX: 0
+    property real pillDragStartPillY: 0
     property bool pillDragStarted: false
     property string pillScreenName: Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
     property int pillX: -1
     property int pillY: 12
 
-    readonly property int pillWindowWidth: root.isRecording || root.isPaused ? 440 : 260
+    readonly property int pillMaxWidth: 440
+    readonly property int pillCollapsedWidth: 260
     readonly property int pillWindowHeight: 60
+    readonly property int pillWindowWidth: root.isRecording || root.isPaused ? root.pillMaxWidth : root.pillCollapsedWidth
 
+    // --- Helpers ---
     function pillClamp(value, minVal, maxVal) {
         return Math.max(minVal, Math.min(maxVal, value));
     }
@@ -44,19 +50,59 @@ PluginComponent {
             if (Quickshell.screens[i].name === root.pillScreenName)
                 return Quickshell.screens[i];
         }
-        return Quickshell.screens[0];
+        return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null;
     }
 
     function pillLocalX(screen) {
-        var defaultX = Math.max(4, screen.width - root.pillWindowWidth - 12);
+        if (!screen) return 12;
+        var defaultX = Math.max(4, screen.width - root.pillMaxWidth - 12);
         var x = root.pillX >= 0 ? root.pillX : defaultX;
-        return pillClamp(x, 4, Math.max(4, screen.width - root.pillWindowWidth - 4));
+        return pillClamp(x, 4, Math.max(4, screen.width - root.pillMaxWidth - 4));
     }
 
     function pillLocalY(screen) {
+        if (!screen) return 12;
         return pillClamp(root.pillY, 4, Math.max(4, screen.height - root.pillWindowHeight - 4));
     }
 
+    function screenByName(name) {
+        for (var i = 0; i < Quickshell.screens.length; i++) {
+            if (Quickshell.screens[i].name === name) return Quickshell.screens[i];
+        }
+        return Quickshell.screens.length > 0 ? Quickshell.screens[0] : null;
+    }
+
+    function screenForGlobalPoint(globalX, globalY) {
+        for (var i = 0; i < Quickshell.screens.length; i++) {
+            var candidate = Quickshell.screens[i];
+            if (globalX >= candidate.x && globalX < candidate.x + candidate.width &&
+                globalY >= candidate.y && globalY < candidate.y + candidate.height) {
+                return candidate;
+            }
+        }
+        return pillScreen();
+    }
+
+    function ensurePillScreen() {
+        if (!screenByName(root.pillScreenName) && Quickshell.screens.length > 0) {
+            root.pillScreenName = Quickshell.screens[0].name;
+            root.pillX = -1;
+            root.pillY = 12;
+        }
+    }
+
+    function loadPosition() {
+        if (!pluginService) return;
+        var savedX = pluginService.loadPluginData("whisperDictate", "pillX", -1);
+        var savedY = pluginService.loadPluginData("whisperDictate", "pillY", 12);
+        var savedScreen = pluginService.loadPluginData("whisperDictate", "pillScreenName", "");
+        if (typeof savedX === "number") root.pillX = savedX;
+        if (typeof savedY === "number") root.pillY = savedY;
+        if (typeof savedScreen === "string" && savedScreen.length > 0) root.pillScreenName = savedScreen;
+        ensurePillScreen();
+    }
+
+    // --- Drag ---
     function beginPillDrag() {
         root.pillDragging = true;
         root.pillDragStarted = false;
@@ -67,9 +113,9 @@ PluginComponent {
         root.pillDragStarted = false;
         var screen = pillScreen();
         if (screen) {
-            var snapThreshold = 30;
+            var snapThreshold = 40;
             var leftLimit = 4;
-            var rightLimit = Math.max(4, screen.width - root.pillWindowWidth - 4);
+            var rightLimit = Math.max(4, screen.width - root.pillMaxWidth - 4);
             var isNearLeft = root.pillX < (leftLimit + snapThreshold);
             var isNearRight = root.pillX > (rightLimit - snapThreshold);
             if (isNearLeft || isNearRight) {
@@ -82,16 +128,29 @@ PluginComponent {
         pluginService.savePluginData("whisperDictate", "pillScreenName", root.pillScreenName);
     }
 
-    function updatePillDrag(globalMouseX, globalMouseY) {
-        if (!root.pillDragging) return;
-        root.pillDragStarted = true;
-        var screen = pillScreen();
-        if (!screen) return;
-        var localX = globalMouseX - screen.x - root.pillDragStartMouseX;
-        var localY = globalMouseY - screen.y - root.pillDragStartMouseY;
-        root.pillX = pillClamp(localX, 4, Math.max(4, screen.width - root.pillWindowWidth - 4));
-        root.pillY = pillClamp(localY, 4, Math.max(4, screen.height - root.pillWindowHeight - 4));
-        root.pillScreenName = screen.name;
+    function updatePillDrag(targetScreen, localMouseX, localMouseY) {
+        if (!targetScreen) return;
+
+        var globalMouseX = targetScreen.x + localMouseX;
+        var globalMouseY = targetScreen.y + localMouseY;
+
+        if (!root.pillDragStarted) {
+            var currentScreen = screenByName(root.pillScreenName) || targetScreen;
+            root.pillDragStartMouseX = globalMouseX;
+            root.pillDragStartMouseY = globalMouseY;
+            root.pillDragStartPillX = currentScreen.x + root.pillLocalX(currentScreen);
+            root.pillDragStartPillY = currentScreen.y + root.pillLocalY(currentScreen);
+            root.pillDragStarted = true;
+            return;
+        }
+
+        var desiredGlobalX = root.pillDragStartPillX + (globalMouseX - root.pillDragStartMouseX);
+        var desiredGlobalY = root.pillDragStartPillY + (globalMouseY - root.pillDragStartMouseY);
+        var newScreen = screenForGlobalPoint(globalMouseX, globalMouseY) || targetScreen;
+
+        root.pillScreenName = newScreen.name;
+        root.pillX = pillClamp(Math.round(desiredGlobalX - newScreen.x), 4, Math.max(4, newScreen.width - root.pillMaxWidth - 4));
+        root.pillY = pillClamp(Math.round(desiredGlobalY - newScreen.y), 4, Math.max(4, newScreen.height - root.pillWindowHeight - 4));
     }
 
     function fmt(sec) {
@@ -105,6 +164,8 @@ PluginComponent {
     FileView {
         id: stateFile
         path: "/tmp/whisper-dictate.json"
+        watchChanges: true
+        printErrors: false
         onLoaded: {
             try { root.stateObj = JSON.parse(text()); }
             catch (e) { root.stateObj = {}; }
@@ -116,22 +177,13 @@ PluginComponent {
     FileView {
         id: levelsFile
         path: "/tmp/whisper-dictate-levels.json"
+        watchChanges: true
+        printErrors: false
         onLoaded: {
             try { root.levelsObj = JSON.parse(text()); }
             catch (e) { root.levelsObj = {}; }
         }
         onLoadFailed: root.levelsObj = {}
-    }
-
-    // Poll both files every 250ms
-    Timer {
-        interval: 250
-        running: true
-        repeat: true
-        onTriggered: {
-            stateFile.reload();
-            levelsFile.reload();
-        }
     }
 
     // Elapsed timer
@@ -157,6 +209,13 @@ PluginComponent {
         root.levels = (root.levelsObj && root.levelsObj.levels) || [];
     }
 
+    onPluginServiceChanged: Qt.callLater(loadPosition)
+
+    Connections {
+        target: Quickshell
+        function onScreensChanged() { root.ensurePillScreen(); }
+    }
+
     // --- IPC ---
     IpcHandler {
         target: "whisperDictate"
@@ -166,38 +225,79 @@ PluginComponent {
         function show(): string { root.pillVisible = true; return "shown"; }
     }
 
+    // --- Drag overlays (one per screen, visible only while dragging) ---
+    Variants {
+        model: Quickshell.screens
+
+        delegate: PanelWindow {
+            id: dragOverlay
+            required property var modelData
+            property var targetScreen: modelData
+
+            screen: targetScreen
+            visible: root.pillDragging
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.namespace: "dms-pill-drag-" + targetScreen.name
+            color: "transparent"
+            exclusionMode: ExclusionMode.Ignore
+
+            anchors {
+                top: true
+                bottom: true
+                left: true
+                right: true
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                z: 3
+                hoverEnabled: true
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                cursorShape: Qt.ClosedHandCursor
+
+                onPositionChanged: function(mouse) {
+                    if (root.pillDragging) {
+                        root.updatePillDrag(dragOverlay.targetScreen, mouse.x, mouse.y);
+                    }
+                }
+                onClicked: root.endPillDrag()
+            }
+        }
+    }
+
     // --- Floating pill window ---
     PanelWindow {
         id: pillWindow
         visible: root.pillVisible
         screen: pillScreen()
 
-        WlrLayershell.layer: WlrLayershell.Overlay
-        WlrLayershell.exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "dms-pill-whisperDictate"
+        exclusionMode: ExclusionMode.Ignore
         color: "transparent"
 
-        x: root.pillLocalX(screen)
-        y: root.pillLocalY(screen)
-        width: root.pillWindowWidth + 12
+        anchors {
+            top: true
+            left: true
+        }
+        margins {
+            left: root.pillLocalX(pillWindow.screen)
+            top: root.pillLocalY(pillWindow.screen)
+        }
+
+        width: root.pillMaxWidth
         height: root.pillWindowHeight
 
-        // Drag via right mouse button
+        // Background MouseArea for dragging (RightButton)
         MouseArea {
             anchors.fill: parent
+            z: -1
+            cursorShape: Qt.PointingHandCursor
             acceptedButtons: Qt.RightButton
-            onPressed: (mouse) => {
-                root.beginPillDrag();
-                root.pillDragStartMouseX = mouse.x;
-                root.pillDragStartMouseY = mouse.y;
+
+            onClicked: function(mouse) {
+                root.pillDragging ? root.endPillDrag() : root.beginPillDrag();
             }
-            onPositionChanged: (mouse) => {
-                if (root.pillDragging) {
-                    var globalX = pillWindow.screen.x + mouse.x;
-                    var globalY = pillWindow.screen.y + mouse.y;
-                    root.updatePillDrag(globalX, globalY);
-                }
-            }
-            onReleased: root.endPillDrag()
         }
 
         Rectangle {

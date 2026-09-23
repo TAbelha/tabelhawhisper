@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Io
-import Quickshell.Wayland
 import qs.Common
 import qs.Services
 import qs.Widgets
@@ -15,23 +13,21 @@ PluginComponent {
     property var historyEntries: []
     property int expandedIndex: -1
 
-    // --- FileView: history ---
+    // --- FileView: history (live via inotify) ---
     FileView {
         id: historyFile
         path: Qt.home() + "/.config/tabelha/whisper-dictate/history.json"
+        watchChanges: true
+        printErrors: false
         onLoaded: {
             try {
                 var data = JSON.parse(text());
-                root.historyEntries = (data.entries || []).slice().reverse(); // newest first
+                root.historyEntries = (data.entries || []).slice().reverse();
             } catch (e) {
                 root.historyEntries = [];
             }
         }
         onLoadFailed: root.historyEntries = []
-    }
-
-    function loadHistory() {
-        historyFile.reload();
     }
 
     function fmtTs(ts) {
@@ -55,8 +51,8 @@ PluginComponent {
 
             DankIcon {
                 name: "history"
-                size: Theme.fontSizeSmall
-                color: Theme.widgetIconColor
+                size: iconSize
+                color: root.historyEntries.length > 0 ? Theme.primary : Theme.widgetInactiveIconColor
                 anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -76,8 +72,8 @@ PluginComponent {
 
             DankIcon {
                 name: "history"
-                size: Theme.fontSizeSmall
-                color: Theme.widgetIconColor
+                size: iconSize
+                color: root.historyEntries.length > 0 ? Theme.primary : Theme.widgetInactiveIconColor
                 anchors.horizontalCenter: parent.horizontalCenter
             }
 
@@ -91,205 +87,183 @@ PluginComponent {
         }
     }
 
-    // --- Popout window ---
-    PanelWindow {
-        id: historyPopout
-        visible: false
+    // --- Popout (DMS-managed, opens on pill click) ---
+    popoutContent: Component {
+        Column {
+            width: parent.width
+            spacing: Theme.spacingS
+            topPadding: Theme.spacingM
+            bottomPadding: Theme.spacingM
+            leftPadding: Theme.spacingM
+            rightPadding: Theme.spacingM
 
-        WlrLayershell.layer: WlrLayershell.Overlay
-        WlrLayershell.exclusionMode: ExclusionMode.Ignore
-        color: "transparent"
+            // Header
+            Item {
+                width: parent.width - Theme.spacingM * 2
+                height: headerTitle.implicitHeight
 
-        width: 380
-        height: Math.min(500, 60 + root.historyEntries.length * 70)
-        anchors.top: true
+                StyledText {
+                    id: headerTitle
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "TAbelha Whisper" + (root.historyEntries.length > 0 ? " (" + root.historyEntries.length + ")" : "")
+                    font.pixelSize: Theme.fontSizeMedium
+                    font.weight: Font.Bold
+                    color: Theme.surfaceText
+                }
 
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: 8
-            radius: 12
-            color: Theme.withAlpha(Theme.surface || "#ffffff", 0.98)
-            border.width: 1
-            border.color: Qt.rgba(0, 0, 0, 0.1)
+                DankIcon {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "delete_sweep"
+                    size: 18
+                    color: Theme.surfaceText
+                    opacity: 0.6
+                    visible: root.historyEntries.length > 0
 
-            Column {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 8
-
-                // Header
-                RowLayout {
-                    width: parent.width
-                    Text {
-                        text: "TAbelha Whisper"
-                        font.pixelSize: 14
-                        font.bold: true
-                        color: Theme.surfaceText
-                        Layout.fillWidth: true
-                    }
-                    Rectangle {
-                        width: 28; height: 28; radius: 6
-                        color: clearArea.containsMouse ? Theme.withAlpha(Theme.error, 0.2) : "transparent"
-                        visible: root.historyEntries.length > 0
-                        Text {
-                            anchors.centerIn: parent
-                            text: "\ud83d\uddd1"
-                            font.pixelSize: 12
-                        }
-                        MouseArea {
-                            id: clearArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                var path = Qt.home() + "/.config/tabelha/whisper-dictate/history.json";
-                                Quickshell.execDetached(["bash", "-c", "echo '{\"entries\":[]}' > '" + path + "'"]);
-                                root.historyEntries = [];
-                            }
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -4
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            var path = Qt.home() + "/.config/tabelha/whisper-dictate/history.json";
+                            Quickshell.execDetached(["bash", "-c", "echo '{\"entries\":[]}' > '" + path + "'"]);
+                            root.historyEntries = [];
                         }
                     }
                 }
+            }
 
-                // Entries list
-                ListView {
-                    width: parent.width
-                    height: parent.height - 44
-                    clip: true
-                    model: root.historyEntries
+            // Entries
+            ListView {
+                width: parent.width - Theme.spacingM * 2
+                height: Math.min(root.historyEntries.length * 70, 380)
+                clip: true
+                visible: root.historyEntries.length > 0
+                spacing: 4
+                model: root.historyEntries
 
-                    delegate: Rectangle {
-                        width: ListView.view.width
-                        height: root.expandedIndex === index ? 140 : 56
-                        radius: 8
-                        color: entryArea.containsMouse ? Theme.withAlpha(Theme.primary, 0.08) : "transparent"
+                delegate: Rectangle {
+                    width: ListView.view.width
+                    height: root.expandedIndex === index ? 130 : 52
+                    radius: Theme.cornerRadius
+                    color: entryArea.containsMouse ? Theme.withAlpha(Theme.primary, 0.08) : "transparent"
 
-                        Behavior on height { NumberAnimation { duration: 200 } }
+                    Behavior on height { NumberAnimation { duration: 200 } }
 
-                        Column {
-                            anchors.fill: parent
-                            anchors.margins: 8
-                            spacing: 4
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: 2
 
-                            // Header row
-                            RowLayout {
-                                width: parent.width
+                        // Header row
+                        RowLayout {
+                            width: parent.width
+                            spacing: Theme.spacingXS
 
-                                // Timestamp
-                                Text {
-                                    text: root.fmtTs(modelData.ts)
-                                    font.pixelSize: 11
-                                    color: Theme.surfaceText
-                                    opacity: 0.6
-                                }
-
-                                // Mode badge
-                                Rectangle {
-                                    width: modeText.width + 8; height: 16; radius: 4
-                                    color: Theme.withAlpha(Theme.primary, 0.15)
-                                    Text {
-                                        id: modeText
-                                        anchors.centerIn: parent
-                                        text: modelData.mode || "wav"
-                                        font.pixelSize: 9
-                                        color: Theme.primary
-                                    }
-                                }
-
-                                // Error badge
-                                Rectangle {
-                                    width: 14; height: 14; radius: 7
-                                    color: Theme.error
-                                    visible: modelData.state === "error"
-                                }
-
-                                Item { Layout.fillWidth: true }
-
-                                // Expand indicator
-                                Text {
-                                    text: root.expandedIndex === index ? "\u25b2" : "\u25bc"
-                                    font.pixelSize: 10
-                                    color: Theme.surfaceText
-                                    opacity: 0.4
-                                }
+                            StyledText {
+                                text: root.fmtTs(modelData.ts)
+                                font.pixelSize: Theme.fontSizeSmall - 2
+                                color: Theme.surfaceVariantText
+                                Layout.preferredWidth: 70
                             }
 
-                            // Preview (collapsed) or full text (expanded)
-                            Text {
-                                width: parent.width
-                                text: root.expandedIndex === index
-                                    ? (modelData.text || "(vazio)")
-                                    : root.truncate(modelData.text, 60)
-                                font.pixelSize: root.expandedIndex === index ? 12 : 11
-                                color: modelData.state === "error" ? Theme.error : Theme.surfaceText
-                                wrapMode: Text.WordWrap
-                                maximumLineCount: root.expandedIndex === index ? 6 : 2
-                                elide: Text.ElideRight
-                            }
-
-                            // Copy button (expanded only, no errors)
                             Rectangle {
-                                width: 70; height: 24; radius: 6
-                                color: copyArea.containsMouse ? Theme.withAlpha(Theme.primary, 0.2) : Theme.withAlpha(Theme.primary, 0.1)
-                                visible: root.expandedIndex === index && modelData.state !== "error"
-                                Text {
+                                width: modeLabel.implicitWidth + 8; height: 16; radius: 4
+                                color: Theme.withAlpha(Theme.primary, 0.15)
+                                StyledText {
+                                    id: modeLabel
                                     anchors.centerIn: parent
-                                    text: "Copiar"
-                                    font.pixelSize: 11
+                                    text: modelData.mode || "wav"
+                                    font.pixelSize: 9
                                     color: Theme.primary
                                 }
-                                MouseArea {
-                                    id: copyArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: {
-                                        DMSService.sendRequest("clipboard.store", {
-                                            data: modelData.text,
-                                            mimeType: "text/plain;charset=utf-8"
-                                        }, function(response) {
-                                            if (!response.error) {
-                                                ToastService.showToast("Copiado!");
-                                            }
-                                        });
-                                    }
+                            }
+
+                            Rectangle {
+                                width: 14; height: 14; radius: 7
+                                color: Theme.error
+                                visible: modelData.state === "error"
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            StyledText {
+                                text: root.expandedIndex === index ? "\u25b2" : "\u25bc"
+                                font.pixelSize: 10
+                                color: Theme.surfaceText
+                                opacity: 0.4
+                            }
+                        }
+
+                        // Preview / full text
+                        StyledText {
+                            width: parent.width
+                            text: root.expandedIndex === index
+                                ? (modelData.text || "(vazio)")
+                                : root.truncate(modelData.text, 80)
+                            font.pixelSize: root.expandedIndex === index ? Theme.fontSizeSmall : Theme.fontSizeSmall - 1
+                            color: modelData.state === "error" ? Theme.error : Theme.surfaceText
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: root.expandedIndex === index ? 5 : 2
+                            elide: Text.ElideRight
+                        }
+
+                        // Copy button (expanded, no errors)
+                        Rectangle {
+                            width: 70; height: 24; radius: 6
+                            color: copyBtnArea.containsMouse ? Theme.withAlpha(Theme.primary, 0.2) : Theme.withAlpha(Theme.primary, 0.1)
+                            visible: root.expandedIndex === index && modelData.state !== "error"
+                            StyledText {
+                                anchors.centerIn: parent
+                                text: "Copiar"
+                                font.pixelSize: Theme.fontSizeSmall - 1
+                                color: Theme.primary
+                            }
+                            MouseArea {
+                                id: copyBtnArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    DMSService.sendRequest("clipboard.store", {
+                                        data: modelData.text,
+                                        mimeType: "text/plain;charset=utf-8"
+                                    }, function(response) {
+                                        if (!response.error) {
+                                            ToastService.showToast("Copiado!");
+                                        }
+                                    });
                                 }
                             }
                         }
+                    }
 
-                        MouseArea {
-                            id: entryArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                if (root.expandedIndex === index)
-                                    root.expandedIndex = -1;
-                                else
-                                    root.expandedIndex = index;
-                            }
-                            z: -1
+                    MouseArea {
+                        id: entryArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            root.expandedIndex = (root.expandedIndex === index) ? -1 : index;
                         }
+                        z: -1
                     }
                 }
+            }
 
-                // Empty state
-                Text {
-                    width: parent.width
-                    text: "Nenhuma transcri\u00e7\u00e3o ainda\nMod+E para gravar"
-                    font.pixelSize: 12
-                    color: Theme.surfaceText
-                    opacity: 0.5
-                    horizontalAlignment: Text.AlignHCenter
-                    visible: root.historyEntries.length === 0
-                }
+            // Empty state
+            StyledText {
+                visible: root.historyEntries.length === 0
+                text: "Nenhuma transcri\u00e7\u00e3o ainda\nMod+E para gravar"
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.surfaceVariantText
+                horizontalAlignment: Text.AlignHCenter
+                width: parent.width - Theme.spacingM * 2
             }
         }
     }
 
-    // Open popout on click
-    function openPopout() {
-        loadHistory();
-        historyPopout.visible = !historyPopout.visible;
-    }
-
-    Component.onCompleted: {
-        root.clicked.connect(openPopout);
-    }
+    popoutWidth: 380
+    popoutHeight: 0
 }
