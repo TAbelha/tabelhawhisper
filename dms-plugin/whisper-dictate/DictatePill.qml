@@ -378,10 +378,9 @@ PluginComponent {
                         model: Math.min(root.levels.length, 16)
                         Rectangle {
                             width: 3
-                            height: 2
                             color: Theme.primary
                             property real barLevel: root.levels[root.levels.length - 1 - index] || 0
-                            implicitHeight: Math.max(2, barLevel * 30)
+                            height: Math.max(2, barLevel * 30)
                             Behavior on height { NumberAnimation { duration: 80 } }
                         }
                     }
@@ -473,10 +472,11 @@ PluginComponent {
                     text: "\u27f3"
                     font.pixelSize: 16
                     color: Theme.warning
-                    SequentialAnimation on rotation {
+                    RotationAnimation on rotation {
+                        from: 0; to: 360; duration: 1000
                         loops: Animation.Infinite
                         running: root.isTranscribing
-                        NumberAnimation { to: 360; duration: 1000 }
+                        onRunningChanged: { if (!running) rotation = 0; }
                     }
                 }
 
