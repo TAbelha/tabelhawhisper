@@ -1,7 +1,7 @@
 [project]
 name = "tabelhawhisper"
-version = "1.1.0"
-description = "Voice dictation for DankMaterialShell: record, transcribe locally with faster-whisper, copy to clipboard, with a dank-bar widget and a silent completion notification."
+version = "2.0.0"
+description = "Voice dictation for DankMaterialShell: record, transcribe locally with faster-whisper, floating pill with controls and wave bars, transcription history in the bar."
 requires-python = ">=3.12"
 dependencies = ["faster-whisper"]
 

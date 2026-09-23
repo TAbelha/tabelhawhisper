@@ -1,13 +1,12 @@
-# tabelawhisper configuration
+# tabelhawhisper configuration
 # Copy to ~/.config/tabelha/whisper-dictate/config.toml and edit.
 
 model = "small"           # base | small | medium | large-v3 (bigger = more accurate, slower)
 language = "auto"          # auto detects pt/en mixed per segment; or pin "pt"/"en"
 multilingual = true        # detect language independently on every segment (code-switching)
-live_mode = "off"               # off | partial | streaming
-partial_interval = 3      # seconds between re-transcriptions (live_mode = partial)
-copy_clipboard = true     # copy the transcript to the clipboard when done
-indicator = true          # show the floating indicator (standalone quickshell app)
-beam_size = 5             # higher = more accurate, slower
-engine = "faster-whisper" # transcription engine
-device = "cpu"            # cpu (default) or cuda if you have a working GPU stack
+mode = "wav"               # wav (file-based, pausa) | streaming (pipe-based, no pausa)
+copy_clipboard = true      # copy the transcript to the clipboard when done
+history_size = 100         # max transcription history entries (ring buffer)
+beam_size = 5              # higher = more accurate, slower
+engine = "faster-whisper"  # transcription engine
+device = "cpu"             # cpu (default) or cuda if you have a working GPU stack

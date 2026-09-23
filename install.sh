@@ -7,7 +7,7 @@ DMS_PLUGINS="$HOME/.config/DankMaterialShell/plugins"
 CFG_DIR="$HOME/.config/tabelha/whisper-dictate"
 OLD_CFG_DIR="$HOME/.config/tabela/whisper-dictate"
 
-echo "==> tabelhawhisper installer"
+echo "==> tabelhawhisper v2.0 installer"
 
 # Migrate config from old dir (tabela) to new dir (tabelha) if needed
 if [ ! -f "$CFG_DIR/config.toml" ] && [ -f "$OLD_CFG_DIR/config.toml" ]; then
@@ -24,16 +24,12 @@ mkdir -p "$NIRI_SCRIPTS"
 cat > "$NIRI_SCRIPTS/whisper-dictate.sh" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-
-# niri keybind runs this without the interactive shell PATH, so make sure the
-# system binaries (pw-record, wl-copy) and the mise shims are reachable.
 export PATH="\$HOME/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin:\$PATH"
-
 exec "$REPO/.venv/bin/python" "$REPO/bin/whisper_dictate.py" toggle
 EOF
 chmod +x "$NIRI_SCRIPTS/whisper-dictate.sh"
 
-echo "==> dms indicator plugin"
+echo "==> dms plugin (composite: daemon pill + widget history)"
 mkdir -p "$DMS_PLUGINS"
 ln -sfn "$REPO/dms-plugin/whisper-dictate" "$DMS_PLUGINS/whisper-dictate"
 
@@ -47,5 +43,6 @@ else
 fi
 
 echo
-echo "Pronto. A tecla Mod+E (já configurada no niri) grava/transcreve."
-echo "Recarregue o dms (restart quickshell) e habilite o widget 'TAbelha Whisper' nas configs."
+echo "Pronto. A tecla Mod+E grava/transcreve."
+echo "Pill flutuante aparece durante gravacao. Widget na barra mostra historico."
+echo "Recarregue o dms e habilite o plugin 'TAbelha Whisper' nas configs."

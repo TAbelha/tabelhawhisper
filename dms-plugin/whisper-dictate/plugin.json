@@ -1,18 +1,21 @@
 {
-    "id": "whisper-dictate",
-    "name": "TAbelha Whisper",
-    "description": "Shows recording status and elapsed time while dictating with TAbelha Whisper.",
-    "version": "1.0.0",
-    "author": "Ian Soares",
-    "icon": "mic",
-    "type": "widget",
-    "capabilities": [
-        "dankbar-widget"
-    ],
-    "component": "./Widget.qml",
-    "requires_dms": ">=1.2.0",
-    "dependencies": [],
-    "permissions": [
-        "filesystem"
-    ]
+  "id": "whisperDictate",
+  "name": "TAbelha Whisper",
+  "description": "Voice dictation: record, transcribe with faster-whisper, floating pill with controls and wave bars, transcription history in the bar.",
+  "category": "utilities",
+  "version": "2.0.0",
+  "author": "Ian Soares",
+  "icon": "mic",
+  "type": "composite",
+  "components": {
+    "daemon": "./DictatePill.qml",
+    "widget": "./HistoryWidget.qml"
+  },
+  "capabilities": ["dankbar-widget", "ipc"],
+  "permissions": ["process"],
+  "requires_dms": ">=1.2.0",
+  "dependencies": ["faster-whisper", "pipewire", "pw-record", "notify-send", "wl-clipboard"],
+  "repo": "https://github.com/TAbelha/tabelhawhisper",
+  "compositors": ["any"],
+  "distro": ["any"]
 }
