@@ -391,7 +391,7 @@ PluginComponent {
                                 color: Theme.primary
                                 property real barLevel: {
                                     var n = root.levels.length;
-                                    var idx = n - waveRow.barCount + index;
+                                    var idx = n - 1 - index;
                                     return (idx >= 0 && idx < n) ? (root.levels[idx] || 0) : 0;
                                 }
                                 height: Math.max(2, barLevel * parent.height)
