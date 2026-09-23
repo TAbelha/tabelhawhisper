@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import os
 import sys
 import tempfile
@@ -82,6 +83,12 @@ def write_state(patch: dict) -> dict:
             Path(tmp_path).unlink()
         raise
     return state
+
+
+def rms_to_level(rms: float) -> float:
+    """Convert RMS amplitude (0–32768) to a 0.0–1.0 level via dB mapping."""
+    db = 20 * math.log10(max(rms, 1.0) / 32768.0)
+    return max(0.0, min(1.0, (db + 60.0) / 60.0))
 
 
 def write_levels(levels: list[float]) -> None:

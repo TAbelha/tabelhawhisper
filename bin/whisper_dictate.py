@@ -26,6 +26,7 @@ from whisper_core import (
     LEVELS_PATH,
     load_config,
     read_state,
+    rms_to_level,
     transcribe_file,
     write_history,
     write_levels,
@@ -140,20 +141,8 @@ def _notify(text: str) -> None:
 
 
 def _clipboard_store(text: str) -> None:
-    """Copy text via wl-copy AND inform DMS clipboard service (dual fallback)."""
+    """Copy text to the system clipboard via wl-copy."""
     subprocess.run(["wl-copy"], input=text.encode(), check=False)
-    subprocess.run(
-        [
-            "dms",
-            "ipc",
-            "call",
-            "clipboardService",
-            "store",
-            json.dumps({"data": text, "mimeType": "text/plain;charset=utf-8"}),
-        ],
-        check=False,
-        capture_output=True,
-    )
 
 
 def _set_procname(name: str) -> None:
@@ -180,7 +169,6 @@ def _wav_writer(pipe, wav_path: str, start_ts: int) -> None:
         wf.setframerate(sample_rate)
 
         levels: list[float] = []
-        write_count = 0
 
         while True:
             data = pipe.read(4096)
@@ -190,14 +178,12 @@ def _wav_writer(pipe, wav_path: str, start_ts: int) -> None:
 
             samples = struct.unpack(f"<{len(data) // 2}h", data)
             rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
-            level = min(1.0, rms / 32768.0)
+            level = rms_to_level(rms)
             levels.append(level)
             levels = levels[-MAX_LEVEL_SAMPLES:]
 
-            write_count += 1
-            if write_count % 8 == 0:  # ~every 100ms at 4096/32000
-                with contextlib.suppress(Exception):
-                    write_levels(levels)
+            with contextlib.suppress(Exception):
+                write_levels(levels)
 
 
 def start(cfg: dict) -> None:
@@ -218,7 +204,7 @@ def start(cfg: dict) -> None:
     log(f"start mode={mode} wav={wav}")
 
     pw = subprocess.Popen(
-        ["pw-record", "--media-category", "Capture", "--format", "s16", "--rate", "16000", "--channels", "1", "-"],
+        ["pw-record", "--raw", "--media-category", "Capture", "--format", "s16", "--rate", "16000", "--channels", "1", "-"],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
@@ -228,6 +214,21 @@ def start(cfg: dict) -> None:
         writer = threading.Thread(target=_wav_writer, args=(pw.stdout, wav, ts), daemon=True)
         writer.start()
         pids = [pw.pid]
+        PID_FILE.write_text(json.dumps({"pids": pids, "mode": mode}))
+        time.sleep(0.5)
+        live = find_pwrec()
+        log(f"after start pwrec_alive={live}")
+        if not live:
+            write_state(
+                {
+                    "state": "error",
+                    "text": "não foi possível iniciar a gravação (microfone/PipeWire indisponível)",
+                }
+            )
+            PID_FILE.unlink(missing_ok=True)
+            return
+        writer.join()  # block until pw-record is killed (stop) → pipe closes
+        return
     else:  # streaming
         st = subprocess.Popen(
             [sys.executable, str(SCRIPT_DIR / "whisper_stream.py")],
