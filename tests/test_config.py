@@ -7,21 +7,21 @@ from whisper_core import DEFAULTS, load_config, transcribe_options
 
 def test_defaults_when_no_file() -> None:
     cfg = load_config(Path("/nonexistent/whisper-dictate-test.toml"))
-    assert cfg["model"] == DEFAULTS["model"] == "small"
-    assert cfg["live_mode"] == "off"
+    assert cfg["model"] == DEFAULTS["model"]
     assert cfg["copy_clipboard"] is True
-    assert cfg["partial_interval"] == 3
+    assert cfg["history_size"] == 100
+    assert "live_mode" not in cfg  # removed in v2.0
+    assert "partial_interval" not in cfg
+    assert "indicator" not in cfg
 
 
 def test_override_merges(tmp_path: Path) -> None:
     p = tmp_path / "c.toml"
-    p.write_text('model = "small"\nlanguage = "en"\nlive_mode = "streaming"\n')
+    p.write_text('model = "small"\nlanguage = "en"\nmode = "streaming"\n')
     cfg = load_config(p)
     assert cfg["model"] == "small"
     assert cfg["language"] == "en"
-    assert cfg["live_mode"] == "streaming"
-    # unknown keys are ignored, untouched defaults remain
-    assert cfg["partial_interval"] == 3
+    assert cfg["history_size"] == 100  # default preserved
 
 
 def test_transcribe_options_resolves_auto() -> None:

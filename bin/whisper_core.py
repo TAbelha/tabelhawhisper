@@ -1,20 +1,33 @@
 """Shared helpers for tabelhawhisper: config, model, and the on-disk state file.
 
 The state file at ``/tmp/whisper-dictate.json`` is the single source of truth
-shared between the shell toggle (whisper_dictate), the streaming transcriber
-(whisper_stream) and the dms indicator plugin. It always carries at least
-``state`` (``recording`` | ``transcribing`` | ``done`` | ``idle``) and, while
-recording, ``start`` (epoch seconds) so the indicator can show elapsed time.
+shared between the orchestrator (whisper_dictate), the streaming transcriber
+(whisper_stream) and the dms pill widget. It always carries at least
+``state`` (``recording`` | ``paused`` | ``transcribing`` | ``done`` | ``idle`` | ``error``)
+and, while recording, ``start`` (epoch seconds) so the pill can show elapsed time.
+
+Levels are written to a dedicated file (``/tmp/whisper-dictate-levels.json``) by the
+wav writer thread or the streaming transcriber, avoiding thread-safety issues with
+the main state file.
+
+History is persisted in ``~/.config/tabelha/whisper-dictate/history.json`` as a
+ring buffer of completed/errored transcriptions.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
 STATE_PATH = Path("/tmp/whisper-dictate.json")
+LEVELS_PATH = Path("/tmp/whisper-dictate-levels.json")
+HISTORY_DIR = Path.home() / ".config" / "tabelha" / "whisper-dictate"
+HISTORY_PATH = HISTORY_DIR / "history.json"
 CONFIG_PATH = Path(
     os.environ.get("WHISPER_DICTATE_CONFIG", "~/.config/tabelha/whisper-dictate/config.toml")
 ).expanduser()
@@ -23,16 +36,16 @@ DEFAULTS = {
     "model": "small",
     "language": "auto",  # auto | pt | en | ... (auto detects pt/en mixed per segment)
     "multilingual": True,  # detect language independently on every segment
-    "live_mode": "off",  # off | partial | streaming
-    "partial_interval": 3,  # seconds between re-transcriptions (partial)
     "copy_clipboard": True,
-    "indicator": True,
+    "history_size": 100,
     "engine": "faster-whisper",
     "device": "cpu",  # cpu | cuda (falls back to cpu if CUDA is unavailable)
     "beam_size": 5,  # higher = more accurate, slower
-    "wav": "/tmp/whisper-dictate.wav",
-    "state_file": str(STATE_PATH),
 }
+
+
+def log(msg: str) -> None:
+    print(f"[whisper_core] {msg}", file=sys.stderr)
 
 
 def load_config(path: Path | None = None) -> dict:
@@ -48,16 +61,65 @@ def load_config(path: Path | None = None) -> dict:
 def read_state() -> dict:
     try:
         return json.loads(STATE_PATH.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
+        return {"state": "idle"}
+    except json.JSONDecodeError:
+        log("read_state: invalid JSON in state file, resetting to idle")
         return {"state": "idle"}
 
 
 def write_state(patch: dict) -> dict:
-    """Merge ``patch`` into the existing state (preserving ``start``) and write it."""
+    """Merge ``patch`` into the existing state (preserving ``start``) and write atomically."""
     state = read_state()
     state.update(patch)
-    STATE_PATH.write_text(json.dumps(state))
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".json", dir=str(STATE_PATH.parent))
+    try:
+        with os.fdopen(tmp_fd, "w") as f:
+            json.dump(state, f, ensure_ascii=False)
+        os.replace(tmp_path, str(STATE_PATH))
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
     return state
+
+
+def write_levels(levels: list[float]) -> None:
+    """Write audio levels to the dedicated levels file (thread-safe, atomic)."""
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".json", dir=str(LEVELS_PATH.parent))
+    try:
+        with os.fdopen(tmp_fd, "w") as f:
+            json.dump({"levels": levels}, f)
+        os.replace(tmp_path, str(LEVELS_PATH))
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
+
+
+def read_history() -> dict:
+    try:
+        return json.loads(HISTORY_PATH.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"entries": []}
+
+
+def write_history(entry: dict, history_size: int = 100) -> None:
+    """Append an entry to the history ring buffer (atomic write)."""
+    hist_dir = HISTORY_PATH.parent
+    hist_dir.mkdir(parents=True, exist_ok=True)
+    history = read_history()
+    history["entries"].append(entry)
+    history["entries"] = history["entries"][-history_size:]
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".json", dir=str(hist_dir))
+    try:
+        with os.fdopen(tmp_fd, "w") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, str(HISTORY_PATH))
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
 
 
 _MODEL = None
