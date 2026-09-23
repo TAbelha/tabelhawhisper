@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-"""tabelhawhisper orchestrator.
+"""tabelhawhisper orchestrator (v2.0).
 
-Run by the niri keybind (Mod+E). ``toggle`` starts or stops a recording; the
-resulting transcript is written to the shared state file and copied to the
-clipboard. On completion a low-priority, silent desktop notification is shown
-(via notify-send); the dms bar widget and floating pill are the live feedback.
-
-Transcription runs in a detachable child process so the dms pill (and the keybind
-wrapper) can ``cancel`` it at any time without waiting for the model to finish.
+Two modes: wav (file-based, pausa via SIGSTOP/SIGCONT) and streaming (pipe-based, no pausa).
+States: idle -> recording -> paused -> recording -> transcribing -> done -> idle.
+Levels computed from PCM chunks, written to dedicated file (thread-safe).
+History persisted in ~/.config/tabelha/whisper-dictate/history.json.
 """
 
 from __future__ import annotations
@@ -18,16 +15,28 @@ import ctypes
 import json
 import os
 import signal
+import struct
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
-from whisper_core import load_config, read_state, transcribe_file, write_state
+from whisper_core import (
+    LEVELS_PATH,
+    load_config,
+    read_state,
+    transcribe_file,
+    write_history,
+    write_levels,
+    write_state,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PID_FILE = Path("/tmp/whisper-dictate.pids")
 LOG_FILE = Path("/tmp/whisper-dictate.log")
+
+MAX_LEVEL_SAMPLES = 60
 
 
 def log(msg: str) -> None:
@@ -59,6 +68,20 @@ def _kill(pids: list[int]) -> None:
             os.kill(pid, signal.SIGTERM)
 
 
+def _kill_force(pids: list[int]) -> None:
+    for pid in pids:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGINT)
+    time.sleep(0.3)
+    for pid in pids:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGTERM)
+    time.sleep(0.3)
+    for pid in pids:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)
+
+
 def _read_pids() -> list[int]:
     try:
         return json.loads(PID_FILE.read_text()).get("pids", [])
@@ -75,11 +98,7 @@ def _alive(pid: int) -> bool:
 
 
 def find_pwrec() -> list[int]:
-    """Return pids of actually-running pw-record processes for our wav.
-
-    Scans /proc directly so it works regardless of PATH or pid-file state
-    (the pid file can go out of sync if a previous toggle crashed).
-    """
+    """Return pids of actually-running pw-record processes for our wav."""
     pids: list[int] = []
     proc = Path("/proc")
     for d in proc.iterdir():
@@ -97,71 +116,7 @@ def find_pwrec() -> list[int]:
 
 def is_recording() -> bool:
     running = find_pwrec()
-    log(f"is_recording -> pwrec_pids={running} pidfile={_read_pids()}")
     return bool(running) or bool([p for p in _read_pids() if _alive(p)])
-
-
-def start(cfg: dict) -> None:
-    ts = int(time.time())
-    wav = f"/tmp/whisper-dictate-{ts}.wav"
-    mode = cfg["live_mode"]
-    write_state({
-        "state": "recording",
-        "start": ts,
-        "text": "",
-        "mode": mode,
-        "wav": wav,
-        "python": sys.executable,
-        "script": str(SCRIPT_DIR / "whisper_dictate.py"),
-        "indicator": cfg.get("indicator", True),
-    })
-    log(f"start mode={mode} wav={wav}")
-
-    pids: list[int] = []
-    if mode == "streaming":
-        pw = subprocess.Popen(
-            ["pw-record", "--format", "s16", "--rate", "16000", "--channels", "1", "-"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        st = subprocess.Popen(
-            [sys.executable, str(SCRIPT_DIR / "whisper_stream.py")],
-            stdin=pw.stdout,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        if pw.stdout is not None:
-            pw.stdout.close()
-        pids = [pw.pid, st.pid]
-    else:
-        pids = [_spawn(["pw-record", "--format", "s16", "--rate", "16000", "--channels", "1", wav])]
-        if mode == "partial":
-            pids.append(
-                _spawn(
-                    [
-                        sys.executable,
-                        str(SCRIPT_DIR / "whisper_dictate.py"),
-                        "watch",
-                        wav,
-                        str(cfg["partial_interval"]),
-                    ]
-                )
-            )
-
-    PID_FILE.write_text(json.dumps({"pids": pids, "mode": mode}))
-    time.sleep(0.5)
-    live = find_pwrec()
-    log(f"after start pwrec_alive={live}")
-    if not live:
-        write_state(
-            {
-                "state": "error",
-                "text": "nao foi possivel iniciar a gravacao (microfone/PipeWire indisponivel)",
-            }
-        )
-        PID_FILE.unlink(missing_ok=True)
 
 
 def _notify(text: str) -> None:
@@ -184,25 +139,157 @@ def _notify(text: str) -> None:
         log(f"notify failed: {e}")
 
 
+def _clipboard_store(text: str) -> None:
+    """Copy text via wl-copy AND inform DMS clipboard service (dual fallback)."""
+    subprocess.run(["wl-copy"], input=text.encode(), check=False)
+    subprocess.run(
+        [
+            "dms",
+            "ipc",
+            "call",
+            "clipboardService",
+            "store",
+            json.dumps({"data": text, "mimeType": "text/plain;charset=utf-8"}),
+        ],
+        check=False,
+        capture_output=True,
+    )
+
+
 def _set_procname(name: str) -> None:
     try:
         libc = ctypes.CDLL("libc.so.6")
         libc.prctl.argtypes = [ctypes.c_int, ctypes.c_char_p]
         libc.prctl.restype = ctypes.c_int
         libc.prctl(15, name.encode()[:15])  # PR_SET_NAME
-    except Exception as e:
-        log(f"set_procname failed: {e}")
+    except Exception:
+        pass
+
+
+def _wav_writer(pipe, wav_path: str, start_ts: int) -> None:
+    """Read PCM from pipe, write wav, compute levels to dedicated file."""
+    import wave
+
+    sample_rate = 16000
+    channels = 1
+    sample_width = 2  # s16le
+
+    with wave.open(wav_path, "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(sample_width)
+        wf.setframerate(sample_rate)
+
+        levels: list[float] = []
+        write_count = 0
+
+        while True:
+            data = pipe.read(4096)
+            if not data:
+                break
+            wf.writeframes(data)
+
+            samples = struct.unpack(f"<{len(data) // 2}h", data)
+            rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
+            level = min(1.0, rms / 32768.0)
+            levels.append(level)
+            levels = levels[-MAX_LEVEL_SAMPLES:]
+
+            write_count += 1
+            if write_count % 8 == 0:  # ~every 100ms at 4096/32000
+                with contextlib.suppress(Exception):
+                    write_levels(levels)
+
+
+def start(cfg: dict) -> None:
+    ts = int(time.time())
+    wav = f"/tmp/whisper-dictate-{ts}.wav"
+    mode = cfg.get("mode", "wav")
+    write_state(
+        {
+            "state": "recording",
+            "start": ts,
+            "text": "",
+            "mode": mode,
+            "wav": wav,
+            "python": sys.executable,
+            "script": str(SCRIPT_DIR / "whisper_dictate.py"),
+        }
+    )
+    log(f"start mode={mode} wav={wav}")
+
+    pw = subprocess.Popen(
+        ["pw-record", "--format", "s16", "--rate", "16000", "--channels", "1", "-"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+    if mode == "wav":
+        writer = threading.Thread(target=_wav_writer, args=(pw.stdout, wav, ts), daemon=True)
+        writer.start()
+        pids = [pw.pid]
+    else:  # streaming
+        st = subprocess.Popen(
+            [sys.executable, str(SCRIPT_DIR / "whisper_stream.py")],
+            stdin=pw.stdout,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        if pw.stdout is not None:
+            pw.stdout.close()
+        pids = [pw.pid, st.pid]
+
+    PID_FILE.write_text(json.dumps({"pids": pids, "mode": mode}))
+    time.sleep(0.5)
+    live = find_pwrec()
+    log(f"after start pwrec_alive={live}")
+    if not live:
+        write_state(
+            {
+                "state": "error",
+                "text": "não foi possível iniciar a gravação (microfone/PipeWire indisponível)",
+            }
+        )
+        PID_FILE.unlink(missing_ok=True)
+
+
+def pause(cfg: dict) -> None:
+    """SIGSTOP the pw-record process(es), state -> paused (wav mode only)."""
+    state = read_state()
+    if state.get("state") != "recording" or state.get("mode") != "wav":
+        return
+    pids = _read_pids()
+    for pid in pids:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGSTOP)
+    write_state({"state": "paused"})
+    log("pause: SIGSTOP sent")
+
+
+def resume(cfg: dict) -> None:
+    """SIGCONT the pw-record process(es), state -> recording."""
+    state = read_state()
+    if state.get("state") != "paused":
+        return
+    pids = _read_pids()
+    for pid in pids:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGCONT)
+    write_state({"state": "recording"})
+    log("resume: SIGCONT sent")
 
 
 def stop(cfg: dict) -> None:
-    mode = read_state().get("mode") or cfg["live_mode"]
-    wav = read_state().get("wav", cfg.get("wav"))
+    state = read_state()
+    mode = state.get("mode", "wav")
+    wav = state.get("wav")
     pids = sorted(set(find_pwrec()) | set(_read_pids()))
     log(f"stop killing pids={pids} mode={mode}")
     _kill(pids)
     PID_FILE.unlink(missing_ok=True)
 
-    if mode in ("off", "partial"):
+    if mode == "wav":
         write_state({"state": "transcribing"})
         tx_pid = _spawn(
             [sys.executable, str(SCRIPT_DIR / "whisper_dictate.py"), "transcribe", wav]
@@ -212,31 +299,87 @@ def stop(cfg: dict) -> None:
     elif mode == "streaming":
         final = read_state()
         text = final.get("text", "")
-        write_state({"state": "done", "text": text})
-        if text.strip():
-            if cfg.get("copy_clipboard"):
-                subprocess.run(["wl-copy"], input=text.encode(), check=False)
-            _notify(text)
+        _finish(text, cfg)
         log(f"stop streaming done textlen={len(text)}")
 
 
-def watch(wav: str, interval: int) -> None:
-    """Partial mode: re-transcribe the growing wav until recording stops."""
+def _finish(text: str, cfg: dict) -> None:
+    """Write result to history, clipboard, notification, and clear levels."""
+    state = read_state()
+    write_state({"state": "done", "text": text})
+    write_history(
+        {
+            "ts": int(time.time()),
+            "mode": state.get("mode"),
+            "state": "done",
+            "text": text,
+            "wav_path": state.get("wav"),
+        },
+        cfg.get("history_size", 100),
+    )
+    if text.strip():
+        if cfg.get("copy_clipboard"):
+            _clipboard_store(text)
+        _notify(text)
+    # Clear levels
+    with contextlib.suppress(Exception):
+        LEVELS_PATH.unlink(missing_ok=True)
+
+
+def cancel(cfg: dict) -> None:
+    """Kill any running transcription/recording and reset to idle."""
+    state = read_state()
+    cur_state = state.get("state", "idle")
+    if cur_state == "idle":
+        return
+
+    pids = sorted(set(find_pwrec()) | set(_read_pids()))
+    log(f"cancel killing pids={pids} state={cur_state}")
+    _kill_force(pids)
+    PID_FILE.unlink(missing_ok=True)
+
+    wav = state.get("wav")
+    if wav:
+        with contextlib.suppress(OSError):
+            Path(wav).unlink(missing_ok=True)
+
+    write_state({"state": "idle", "text": ""})
+    with contextlib.suppress(Exception):
+        LEVELS_PATH.unlink(missing_ok=True)
+    log("cancel done")
+
+
+def transcribe(wav_path: str) -> None:
+    """Transcribe a wav file and write the result to the state file."""
+    _set_procname("twhisper-tx")
     cfg = load_config()
-    while read_state().get("state") == "recording":
-        try:
-            text = transcribe_file(
-                wav,
-                cfg["model"],
-                cfg["language"],
-                cfg.get("device", "cpu"),
-                cfg.get("multilingual", True),
-                cfg.get("beam_size", 5),
-            )
-            write_state({"text": text})
-        except Exception:
-            pass
-        time.sleep(max(1, interval))
+    write_state({"state": "transcribing"})
+    log(f"transcribe start wav={wav_path}")
+    try:
+        text = transcribe_file(
+            wav_path,
+            cfg["model"],
+            cfg["language"],
+            cfg.get("device", "cpu"),
+            cfg.get("multilingual", True),
+            cfg.get("beam_size", 5),
+        )
+    except Exception as e:
+        log(f"transcribe error: {e}")
+        write_state({"state": "error", "text": f"[error: {e}]"})
+        write_history(
+            {
+                "ts": int(time.time()),
+                "mode": read_state().get("mode"),
+                "state": "error",
+                "text": f"[error: {e}]",
+                "wav_path": wav_path,
+            },
+            cfg.get("history_size", 100),
+        )
+        return
+    _finish(text, cfg)
+    log(f"transcribe done textlen={len(text)}")
 
 
 def toggle(cfg: dict) -> None:
@@ -244,12 +387,14 @@ def toggle(cfg: dict) -> None:
     cur_state = state.get("state", "idle")
     rec = is_recording()
     log(f"toggle state={cur_state} is_recording={rec}")
-    if rec or cur_state == "recording":
+    if rec or cur_state in ("recording", "paused"):
         stop(cfg)
     elif cur_state == "transcribing":
         cancel(cfg)
+        cfg["mode"] = cfg.get("mode", "wav")
         start(cfg)
     else:
+        cfg["mode"] = cfg.get("mode", "wav")
         start(cfg)
 
 
@@ -261,26 +406,28 @@ def main() -> None:
     sub.add_parser("start")
     sub.add_parser("stop")
     sub.add_parser("cancel")
+    sub.add_parser("pause")
+    sub.add_parser("resume")
     tp = sub.add_parser("transcribe")
     tp.add_argument("wav")
-    wp = sub.add_parser("watch")
-    wp.add_argument("wav")
-    wp.add_argument("interval", type=int)
     args = ap.parse_args()
 
     cfg = load_config()
     if args.cmd == "toggle":
         toggle(cfg)
     elif args.cmd == "start":
+        cfg["mode"] = cfg.get("mode", "wav")
         start(cfg)
     elif args.cmd == "stop":
         stop(cfg)
     elif args.cmd == "cancel":
         cancel(cfg)
+    elif args.cmd == "pause":
+        pause(cfg)
+    elif args.cmd == "resume":
+        resume(cfg)
     elif args.cmd == "transcribe":
         transcribe(args.wav)
-    elif args.cmd == "watch":
-        watch(args.wav, args.interval)
 
 
 if __name__ == "__main__":

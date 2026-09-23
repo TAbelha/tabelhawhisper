@@ -76,10 +76,10 @@ def write_state(patch: dict) -> dict:
     try:
         with os.fdopen(tmp_fd, "w") as f:
             json.dump(state, f, ensure_ascii=False)
-        os.replace(tmp_path, str(STATE_PATH))
+        Path(tmp_path).replace(STATE_PATH)
     except BaseException:
         with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
+            Path(tmp_path).unlink()
         raise
     return state
 
@@ -90,10 +90,10 @@ def write_levels(levels: list[float]) -> None:
     try:
         with os.fdopen(tmp_fd, "w") as f:
             json.dump({"levels": levels}, f)
-        os.replace(tmp_path, str(LEVELS_PATH))
+        Path(tmp_path).replace(LEVELS_PATH)
     except BaseException:
         with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
+            Path(tmp_path).unlink()
         raise
 
 
@@ -115,10 +115,10 @@ def write_history(entry: dict, history_size: int = 100) -> None:
     try:
         with os.fdopen(tmp_fd, "w") as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, str(HISTORY_PATH))
+        Path(tmp_path).replace(HISTORY_PATH)
     except BaseException:
         with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
+            Path(tmp_path).unlink()
         raise
 
 
