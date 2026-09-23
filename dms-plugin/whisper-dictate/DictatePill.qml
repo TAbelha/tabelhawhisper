@@ -31,7 +31,8 @@ PluginComponent {
     property real pillDragStartPillX: 0
     property real pillDragStartPillY: 0
     property bool pillDragStarted: false
-    property string pillScreenName: Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
+    property string pillScreenName: ""
+    property bool pillScreenPersisted: false
     property int pillX: -1
     property int pillY: 12
 
@@ -98,7 +99,16 @@ PluginComponent {
         var savedScreen = pluginService.loadPluginData("whisperDictate", "pillScreenName", "");
         if (typeof savedX === "number") root.pillX = savedX;
         if (typeof savedY === "number") root.pillY = savedY;
-        if (typeof savedScreen === "string" && savedScreen.length > 0) root.pillScreenName = savedScreen;
+        if (typeof savedScreen === "string" && savedScreen.length > 0) {
+            root.pillScreenName = savedScreen;
+            root.pillScreenPersisted = true;
+        } else {
+            var focused = (typeof CompositorService !== "undefined" && CompositorService.getFocusedScreen)
+                ? CompositorService.getFocusedScreen() : null;
+            root.pillScreenName = focused ? focused.name
+                : (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "");
+            root.pillScreenPersisted = false;
+        }
         ensurePillScreen();
     }
 
@@ -126,6 +136,7 @@ PluginComponent {
         pluginService.savePluginData("whisperDictate", "pillX", root.pillX);
         pluginService.savePluginData("whisperDictate", "pillY", root.pillY);
         pluginService.savePluginData("whisperDictate", "pillScreenName", root.pillScreenName);
+        root.pillScreenPersisted = true;
     }
 
     function updatePillDrag(targetScreen, localMouseX, localMouseY) {
@@ -164,7 +175,6 @@ PluginComponent {
     FileView {
         id: stateFile
         path: "/tmp/whisper-dictate.json"
-        watchChanges: true
         printErrors: false
         onLoaded: {
             try { root.stateObj = JSON.parse(text()); }
@@ -173,17 +183,30 @@ PluginComponent {
         onLoadFailed: root.stateObj = {}
     }
 
+    Timer {
+        interval: 250
+        repeat: true
+        running: true
+        onTriggered: stateFile.reload()
+    }
+
     // --- FileView: levels ---
     FileView {
         id: levelsFile
         path: "/tmp/whisper-dictate-levels.json"
-        watchChanges: true
         printErrors: false
         onLoaded: {
             try { root.levelsObj = JSON.parse(text()); }
             catch (e) { root.levelsObj = {}; }
         }
         onLoadFailed: root.levelsObj = {}
+    }
+
+    Timer {
+        interval: 100
+        repeat: true
+        running: root.isRecording || root.isPaused
+        onTriggered: levelsFile.reload()
     }
 
     // Elapsed timer
@@ -201,6 +224,11 @@ PluginComponent {
         root.isTranscribing = (st === "transcribing");
         root.startTime = (root.stateObj && root.stateObj.start) || 0;
         root.pillVisible = root.isRecording || root.isPaused || root.isTranscribing;
+        if (root.pillVisible && !root.pillScreenPersisted) {
+            var focused = (typeof CompositorService !== "undefined" && CompositorService.getFocusedScreen)
+                ? CompositorService.getFocusedScreen() : null;
+            if (focused) root.pillScreenName = focused.name;
+        }
         if (root.isRecording)
             root.elapsed = Math.max(0, Math.floor(Date.now() / 1000 - root.startTime));
     }

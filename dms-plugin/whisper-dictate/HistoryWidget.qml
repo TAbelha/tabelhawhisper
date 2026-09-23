@@ -14,11 +14,10 @@ PluginComponent {
     property var historyEntries: []
     property int expandedIndex: -1
 
-    // --- FileView: history (live via inotify) ---
+    // --- FileView: history (polling — atomic writes break watchChanges/inotify) ---
     FileView {
         id: historyFile
         path: Qt.home() + "/.config/tabelha/whisper-dictate/history.json"
-        watchChanges: true
         printErrors: false
         onLoaded: {
             try {
@@ -29,6 +28,13 @@ PluginComponent {
             }
         }
         onLoadFailed: root.historyEntries = []
+    }
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: true
+        onTriggered: historyFile.reload()
     }
 
     function fmtTs(ts) {
