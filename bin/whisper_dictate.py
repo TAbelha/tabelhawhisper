@@ -98,7 +98,7 @@ def _alive(pid: int) -> bool:
 
 
 def find_pwrec() -> list[int]:
-    """Return pids of actually-running pw-record processes for our wav."""
+    """Return pids of actually-running pw-record processes for our session."""
     pids: list[int] = []
     proc = Path("/proc")
     for d in proc.iterdir():
@@ -108,7 +108,7 @@ def find_pwrec() -> list[int]:
             cmd = (d / "cmdline").read_bytes().replace(b"\x00", b" ").decode(errors="ignore")
         except Exception:
             continue
-        if cmd.startswith("pw-record") and "/tmp/whisper-dictate" in cmd:
+        if cmd.startswith("pw-record") and "Capture" in cmd:
             with contextlib.suppress(ValueError):
                 pids.append(int(d.name))
     return pids
@@ -218,7 +218,7 @@ def start(cfg: dict) -> None:
     log(f"start mode={mode} wav={wav}")
 
     pw = subprocess.Popen(
-        ["pw-record", "--format", "s16", "--rate", "16000", "--channels", "1", "-"],
+        ["pw-record", "--media-category", "Capture", "--format", "s16", "--rate", "16000", "--channels", "1", "-"],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
