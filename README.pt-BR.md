@@ -15,7 +15,7 @@
 
 ---
 
-Ditado por voz para o [DankMaterialShell](https://github.com/TAbelhaDev/dankmaterialshell)
+Ditado por voz para o [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell)
 no niri (Wayland): aperte uma tecla, fale, e o texto transcrito vai parar na sua
 área de transferência. O feedback fica na **barra dank** como um widget pequeno
 que aparece só enquanto você dita, e uma **notificação silenciosa de prioridade
@@ -61,7 +61,7 @@ texto transcrito.
 ## Instalação
 
 ```bash
-git clone https://github.com/TAbelhaDev/tabelhawhisper
+git clone https://github.com/TAbelha/tabelhawhisper
 cd tabelhawhisper
 ./install.sh
 ```

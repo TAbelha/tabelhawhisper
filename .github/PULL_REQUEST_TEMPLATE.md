@@ -8,4 +8,4 @@
 
 ## Checklist
 
-- [ ] Rodei `go vet ./...`, `go test ./...` e `go build ./...` localmente
+- [ ] Rodei `uv run ruff check .`, `uv run basedpyright` e `uv run pytest` localmente

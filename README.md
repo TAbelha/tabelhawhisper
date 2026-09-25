@@ -1,6 +1,6 @@
 # tabelhawhisper
 
-Voice dictation plugin for [DankMaterialShell](https://github.com/niceDev0908/DankMaterialShell):
+Voice dictation plugin for [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell):
 record audio, transcribe locally with [faster-whisper](https://github.com/SYSTRAN/faster-whisper),
 copy to clipboard, with a floating pill overlay and a transcription history widget.
 

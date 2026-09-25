@@ -1,4 +1,4 @@
-# Contributing to TabelaWhisper
+# Contributing to TAbelhaWhisper
 
 **English** · [Português](CONTRIBUTING.pt-BR.md)
 
