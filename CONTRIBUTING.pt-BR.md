@@ -18,7 +18,7 @@ Abra uma [issue](../../issues/new/choose) usando o template apropriado.
 
 ## Idioma
 
-A convenção vale pra todo projeto do TAbelhaDev, pra isso não ser decidido de
+A convenção vale pra todo projeto da TAbelha, pra isso não ser decidido de
 novo em cada repo:
 
 **Inglês, sem exceção** — identificadores, nomes de arquivo, rotas, query
