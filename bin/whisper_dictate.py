@@ -130,7 +130,7 @@ def _notify(text: str) -> None:
                 "-h",
                 "boolean:suppress-sound:true",
                 "-a",
-                "TAbelha Whisper",
+                "TAbelhaWhisper",
                 "Transcrição",
                 text[:500],
             ],

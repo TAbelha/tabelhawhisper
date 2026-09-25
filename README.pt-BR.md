@@ -1,6 +1,6 @@
 <div align="center">
 
-# TAbelha Whisper
+# TAbelhaWhisper
 
 **English** · [Português](README.pt-BR.md)
 
@@ -37,7 +37,7 @@ Tudo roda localmente; nada é enviado para a rede.
 
 ## O widget da barra dank
 
-O widget `TAbelha Whisper` (um plugin do dms) lê o arquivo de estado compartilhado
+O widget `TAbelhaWhisper` (um plugin do dms) lê o arquivo de estado compartilhado
 e se mostra só enquanto está ativo:
 
 - **Gravando**: ícone de microfone vermelho mais um timer `mm:ss` decorrido.
@@ -46,7 +46,7 @@ e se mostra só enquanto está ativo:
   espaço fica reservado.
 
 Quando a transcrição termina, o widget some e uma notificação de desktop
-**silenciosa, de prioridade mínima** (nome do app `TAbelha Whisper`) mostra o
+**silenciosa, de prioridade mínima** (nome do app `TAbelhaWhisper`) mostra o
 texto transcrito.
 
 ## Requisitos
@@ -79,7 +79,7 @@ Depois:
    ```kdl
    bind Mod+E { spawn "~/.config/niri/scripts/whisper-dictate.sh"; }
    ```
-2. Recarregue o dms (reinicie o quickshell) e **habilite o widget `TAbelha Whisper`**
+2. Recarregue o dms (reinicie o quickshell) e **habilite o widget `TAbelhaWhisper`**
    nas configurações da barra.
 3. Aperte `Mod+E` e comece a falar.
 

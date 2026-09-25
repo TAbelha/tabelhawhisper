@@ -113,7 +113,7 @@ PluginComponent {
                     id: headerTitle
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "TAbelha Whisper" + (root.historyEntries.length > 0 ? " (" + root.historyEntries.length + ")" : "")
+                    text: "TAbelhaWhisper" + (root.historyEntries.length > 0 ? " (" + root.historyEntries.length + ")" : "")
                     font.pixelSize: Theme.fontSizeMedium
                     font.weight: Font.Bold
                     color: Theme.surfaceText

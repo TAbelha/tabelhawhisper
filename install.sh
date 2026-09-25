@@ -45,4 +45,4 @@ fi
 echo
 echo "Pronto. A tecla Mod+E grava/transcreve."
 echo "Pill flutuante aparece durante gravacao. Widget na barra mostra historico."
-echo "Recarregue o dms e habilite o plugin 'TAbelha Whisper' nas configs."
+echo "Recarregue o dms e habilite o plugin 'TAbelhaWhisper' nas configs."
