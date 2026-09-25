@@ -49,7 +49,7 @@ pra publicar no registro DMS e morar na nova org TAbelha.
 ```json
 {
   "id": "whisperDictate",
-  "name": "TAbelha Whisper",
+  "name": "TAbelhaWhisper",
   "description": "Ditado por voz local: grava, transcreve com faster-whisper, pilha flutuante com controles e histórico de transcrições na barra.",
   "category": "utilities",
   "version": "2.0.0",
@@ -568,7 +568,7 @@ PanelWindow {
 
 ```qml
 Column {
-    // Header: "TAbelha Whisper" + botão limpar (delete_sweep)
+    // Header: "TAbelhaWhisper" + botão limpar (delete_sweep)
     // Lista de itens (Repeater sobre history entries, newest first):
     //   Item -> Row { timestamp_preview, text_preview (2 linhas), badge_erro? }
     //   Click no item → expande inline (Item.expanded = !expanded)

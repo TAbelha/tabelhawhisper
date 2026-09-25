@@ -448,7 +448,7 @@ def _notify(text: str) -> None:
                 "notify-send",
                 "-u", "low",
                 "-h", "boolean:suppress-sound:true",
-                "-a", "TAbelha Whisper",
+                "-a", "TAbelhaWhisper",
                 "Transcrição",
                 text[:500],
             ],
@@ -1027,7 +1027,7 @@ git commit -m "chore: v2.0 config, version bump, test cleanup"
 ```json
 {
   "id": "whisperDictate",
-  "name": "TAbelha Whisper",
+  "name": "TAbelhaWhisper",
   "description": "Voice dictation: record, transcribe with faster-whisper, floating pill with controls and wave bars, transcription history in the bar.",
   "category": "utilities",
   "version": "2.0.0",
@@ -1607,7 +1607,7 @@ PluginComponent {
                 RowLayout {
                     width: parent.width
                     Text {
-                        text: "TAbelha Whisper"
+                        text: "TAbelhaWhisper"
                         font.pixelSize: 14
                         font.bold: true
                         color: Theme.surfaceText
@@ -1863,7 +1863,7 @@ fi
 echo
 echo "Pronto. A tecla Mod+E grava/transcreve."
 echo "Pill flutuante aparece durante gravação. Widget na barra mostra histórico."
-echo "Recarregue o dms e habilite o plugin 'TAbelha Whisper' nas configs."
+echo "Recarregue o dms e habilite o plugin 'TAbelhaWhisper' nas configs."
 ```
 
 - [ ] **Step 2: Update README.md**
