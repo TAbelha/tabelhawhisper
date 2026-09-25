@@ -1,5 +1,5 @@
 {
-  "id": "whisperDictate",
+  "id": "tabelhawhisper",
   "name": "TAbelhaWhisper",
   "description": "Voice dictation: record, transcribe with faster-whisper, floating pill with controls and wave bars, transcription history in the bar.",
   "category": "utilities",

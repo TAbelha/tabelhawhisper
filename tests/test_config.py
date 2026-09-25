@@ -6,7 +6,7 @@ from whisper_core import DEFAULTS, load_config, transcribe_options
 
 
 def test_defaults_when_no_file() -> None:
-    cfg = load_config(Path("/nonexistent/whisper-dictate-test.toml"))
+    cfg = load_config(Path("/nonexistent/tabelhawhisper-test.toml"))
     assert cfg["model"] == DEFAULTS["model"]
     assert cfg["copy_clipboard"] is True
     assert cfg["history_size"] == 100

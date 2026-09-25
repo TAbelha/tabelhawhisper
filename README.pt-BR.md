@@ -69,15 +69,15 @@ cd tabelhawhisper
 O `install.sh` vai:
 
 - sincronizar o ambiente `uv` (baixa torch + faster-whisper na primeira rodada);
-- colocar um auxiliar de atalho em `~/.config/niri/scripts/whisper-dictate.sh`;
-- criar um symlink do plugin do dms em `~/.config/DankMaterialShell/plugins/whisper-dictate`;
-- criar `~/.config/tabelha/whisper-dictate/config.toml` a partir do exemplo, se não existir.
+- colocar um auxiliar de atalho em `~/.config/niri/scripts/tabelhawhisper.sh`;
+- criar um symlink do plugin do dms em `~/.config/DankMaterialShell/plugins/tabelhawhisper`;
+- criar `~/.config/tabelha/tabelhawhisper/config.toml` a partir do exemplo, se não existir.
 
 Depois:
 
 1. Adicione o atalho na config do niri (o caminho do script acima):
    ```kdl
-   bind Mod+E { spawn "~/.config/niri/scripts/whisper-dictate.sh"; }
+   bind Mod+E { spawn "~/.config/niri/scripts/tabelhawhisper.sh"; }
    ```
 2. Recarregue o dms (reinicie o quickshell) e **habilite o widget `TAbelhaWhisper`**
    nas configurações da barra.
@@ -85,8 +85,8 @@ Depois:
 
 ## Configuração
 
-A config fica em `~/.config/tabelha/whisper-dictate/config.toml`. Veja
-[`config/whisper-dictate.toml.example`](config/whisper-dictate.toml.example)
+A config fica em `~/.config/tabelha/tabelhawhisper/config.toml`. Veja
+[`config/tabelhawhisper.toml.example`](config/tabelhawhisper.toml.example)
 para todas as opções. Destaques:
 
 | Chave | Padrão | Significado |
@@ -111,8 +111,8 @@ para todas as opções. Destaques:
 
 ## Depuração
 
-- Arquivo de estado: `/tmp/whisper-dictate.json` (`state`, `elapsed`, `start`, `text`).
-- Log: `/tmp/whisper-dictate.log`.
+- Arquivo de estado: `/tmp/tabelhawhisper.json` (`state`, `elapsed`, `start`, `text`).
+- Log: `/tmp/tabelhawhisper.log`.
 - Processos: o gravador é `pw-record`; o orquestrador renomeia a si mesmo para
   `twhisper` (via `prctl`) para ser fácil de achar:
   ```bash

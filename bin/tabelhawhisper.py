@@ -4,7 +4,7 @@
 Two modes: wav (file-based, pausa via SIGSTOP/SIGCONT) and streaming (pipe-based, no pausa).
 States: idle -> recording -> paused -> recording -> transcribing -> done -> idle.
 Levels computed from PCM chunks, written to dedicated file (thread-safe).
-History persisted in ~/.config/tabelha/whisper-dictate/history.json.
+History persisted in ~/.config/tabelha/tabelhawhisper/history.json.
 """
 
 from __future__ import annotations
@@ -34,8 +34,8 @@ from whisper_core import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PID_FILE = Path("/tmp/whisper-dictate.pids")
-LOG_FILE = Path("/tmp/whisper-dictate.log")
+PID_FILE = Path("/tmp/tabelhawhisper.pids")
+LOG_FILE = Path("/tmp/tabelhawhisper.log")
 
 MAX_LEVEL_SAMPLES = 60
 
@@ -188,7 +188,7 @@ def _wav_writer(pipe, wav_path: str, start_ts: int) -> None:
 
 def start(cfg: dict) -> None:
     ts = int(time.time())
-    wav = f"/tmp/whisper-dictate-{ts}.wav"
+    wav = f"/tmp/tabelhawhisper-{ts}.wav"
     mode = cfg.get("mode", "wav")
     write_state(
         {
@@ -198,7 +198,7 @@ def start(cfg: dict) -> None:
             "mode": mode,
             "wav": wav,
             "python": sys.executable,
-            "script": str(SCRIPT_DIR / "whisper_dictate.py"),
+            "script": str(SCRIPT_DIR / "tabelhawhisper.py"),
         }
     )
     log(f"start mode={mode} wav={wav}")
@@ -293,7 +293,7 @@ def stop(cfg: dict) -> None:
     if mode == "wav":
         write_state({"state": "transcribing"})
         tx_pid = _spawn(
-            [sys.executable, str(SCRIPT_DIR / "whisper_dictate.py"), "transcribe", wav]
+            [sys.executable, str(SCRIPT_DIR / "tabelhawhisper.py"), "transcribe", wav]
         )
         PID_FILE.write_text(json.dumps({"pids": [tx_pid], "mode": mode}))
         log(f"stop spawned transcribe pid={tx_pid} wav={wav}")
@@ -401,7 +401,7 @@ def toggle(cfg: dict) -> None:
 
 def main() -> None:
     _set_procname("twhisper")
-    ap = argparse.ArgumentParser(prog="whisper_dictate")
+    ap = argparse.ArgumentParser(prog="tabelhawhisper")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("toggle")
     sub.add_parser("start")

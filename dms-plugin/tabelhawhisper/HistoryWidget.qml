@@ -9,7 +9,7 @@ import qs.Modules.Plugins
 
 PluginComponent {
     id: root
-    pluginId: "whisperDictate"
+    pluginId: "tabelhawhisper"
 
     property var historyEntries: []
     property int expandedIndex: -1
@@ -17,7 +17,7 @@ PluginComponent {
     // --- FileView: history (polling — atomic writes break watchChanges/inotify) ---
     FileView {
         id: historyFile
-        path: Qt.home() + "/.config/tabelha/whisper-dictate/history.json"
+        path: Qt.home() + "/.config/tabelha/tabelhawhisper/history.json"
         printErrors: false
         onLoaded: {
             try {
@@ -134,7 +134,7 @@ PluginComponent {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            var path = Qt.home() + "/.config/tabelha/whisper-dictate/history.json";
+                            var path = Qt.home() + "/.config/tabelha/tabelhawhisper/history.json";
                             Quickshell.execDetached(["bash", "-c", "echo '{\"entries\":[]}' > '" + path + "'"]);
                             root.historyEntries = [];
                         }

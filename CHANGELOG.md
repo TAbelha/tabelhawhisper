@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Breaking:** internal ids renamed from `whisper-dictate`/`whisperDictate` to `tabelhawhisper`: DMS plugin id and IPC target (`dms ipc call tabelhawhisper ...`), plugin dir, `bin/tabelhawhisper.py`, config dir (`~/.config/tabelha/tabelhawhisper/`), niri wrapper (`tabelhawhisper.sh`), `/tmp/tabelhawhisper*` runtime files, `TABELHAWHISPER_CONFIG` env var
+- `install.sh` migrates the old config dir (keeping `history.json`) and removes the old plugin symlink and niri wrapper
+- After upgrading: re-run `install.sh`, re-enable the TAbelhaWhisper plugin in DMS, and point the Mod+E bind at `tabelhawhisper.sh`
+
 ## 2.0.0
 
 - Floating pill overlay with recording controls, wave bars, and transcription status

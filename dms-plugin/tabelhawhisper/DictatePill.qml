@@ -10,8 +10,8 @@ import qs.Modules.Plugins
 
 PluginComponent {
     id: root
-    pluginId: "whisperDictate"
-    layerNamespacePlugin: "whisperDictate"
+    pluginId: "tabelhawhisper"
+    layerNamespacePlugin: "tabelhawhisper"
 
     // --- State ---
     property bool isRecording: false
@@ -94,9 +94,9 @@ PluginComponent {
 
     function loadPosition() {
         if (!pluginService) return;
-        var savedX = pluginService.loadPluginData("whisperDictate", "pillX", -1);
-        var savedY = pluginService.loadPluginData("whisperDictate", "pillY", 12);
-        var savedScreen = pluginService.loadPluginData("whisperDictate", "pillScreenName", "");
+        var savedX = pluginService.loadPluginData("tabelhawhisper", "pillX", -1);
+        var savedY = pluginService.loadPluginData("tabelhawhisper", "pillY", 12);
+        var savedScreen = pluginService.loadPluginData("tabelhawhisper", "pillScreenName", "");
         if (typeof savedX === "number") root.pillX = savedX;
         if (typeof savedY === "number") root.pillY = savedY;
         if (typeof savedScreen === "string" && savedScreen.length > 0) {
@@ -133,9 +133,9 @@ PluginComponent {
                 if (isNearRight) root.pillX = rightLimit;
             }
         }
-        pluginService.savePluginData("whisperDictate", "pillX", root.pillX);
-        pluginService.savePluginData("whisperDictate", "pillY", root.pillY);
-        pluginService.savePluginData("whisperDictate", "pillScreenName", root.pillScreenName);
+        pluginService.savePluginData("tabelhawhisper", "pillX", root.pillX);
+        pluginService.savePluginData("tabelhawhisper", "pillY", root.pillY);
+        pluginService.savePluginData("tabelhawhisper", "pillScreenName", root.pillScreenName);
         root.pillScreenPersisted = true;
     }
 
@@ -174,7 +174,7 @@ PluginComponent {
     // --- FileView: state ---
     FileView {
         id: stateFile
-        path: "/tmp/whisper-dictate.json"
+        path: "/tmp/tabelhawhisper.json"
         printErrors: false
         onLoaded: {
             try { root.stateObj = JSON.parse(text()); }
@@ -193,7 +193,7 @@ PluginComponent {
     // --- FileView: levels ---
     FileView {
         id: levelsFile
-        path: "/tmp/whisper-dictate-levels.json"
+        path: "/tmp/tabelhawhisper-levels.json"
         printErrors: false
         onLoaded: {
             try { root.levelsObj = JSON.parse(text()); }
@@ -246,7 +246,7 @@ PluginComponent {
 
     // --- IPC ---
     IpcHandler {
-        target: "whisperDictate"
+        target: "tabelhawhisper"
         function ping(): string { return "pong"; }
         function status(): string { return JSON.stringify(root.stateObj); }
         function hide(): string { root.pillVisible = false; return "hidden"; }
@@ -300,7 +300,7 @@ PluginComponent {
         screen: pillScreen()
 
         WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.namespace: "dms-pill-whisperDictate"
+        WlrLayershell.namespace: "dms-pill-tabelhawhisper"
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"
 

@@ -3,23 +3,23 @@
 ## Estado atual (2026-09-12)
 
 ### Aplicado e confirmado (git diff)
-- `install.sh`: CFG_DIR corrigido para `~/.config/tabelha/whisper-dictate` + migração automática do config antigo (`tabela/` → `tabelha/`)
-- `config/whisper-dictate.toml.example`: cabeçalho corrigido para `tabelha`
+- `install.sh`: CFG_DIR corrigido para `~/.config/tabelha/tabelhawhisper` + migração automática do config antigo (`tabela/` → `tabelha/`)
+- `config/tabelhawhisper.toml.example`: cabeçalho corrigido para `tabelha`
 - `pyproject.toml`: versão `1.1.0`
 - `uv.lock`: regenerado (name `tabelhawhisper`, version `1.1.0`)
 - `CHANGELOG.md`: reordenado (1.0.0/1.0.1/1.1.0) + seção 1.1.0 com todas as entradas
-- `bin/whisper_dictate.py` (parcial):
+- `bin/tabelhawhisper.py` (parcial):
   - docstring atualizada (mention pill + cancel)
-  - `find_pwrec()`: check `/tmp/whisper-dictate` (suporta wav por sessão)
-  - `start()`: wav por sessão (`/tmp/whisper-dictate-<ts>.wav`), grava `wav`/`python`/`script`/`indicator` no state
+  - `find_pwrec()`: check `/tmp/tabelhawhisper` (suporta wav por sessão)
+  - `start()`: wav por sessão (`/tmp/tabelhawhisper-<ts>.wav`), grava `wav`/`python`/`script`/`indicator` no state
   - `stop()`: spawna `transcribe <wav>` como filho destacado (não transcreve inline)
   - `toggle()`: gravando→stop, transcrevendo→cancel+start, ocioso→start
   - `main()`: subcomandos `cancel` e `transcribe` registrados
 
 ### Faltando (edições travadas não aplicaram)
 1. **`bin/whisper_core.py:23`** → `"model": "small"` precisa virar `"medium"`
-2. **`bin/whisper_dictate.py`** → faltam `_kill_force()`, `transcribe()` e `cancel()` (arquivo quebrado, NameError)
-3. **`config/whisper-dictate.toml.example:4`** → `model = "small"` precisa virar `"medium"` + comentário do `indicator` (linha 10) ainda diz "standalone quickshell app"
+2. **`bin/tabelhawhisper.py`** → faltam `_kill_force()`, `transcribe()` e `cancel()` (arquivo quebrado, NameError)
+3. **`config/tabelhawhisper.toml.example:4`** → `model = "small"` precisa virar `"medium"` + comentário do `indicator` (linha 10) ainda diz "standalone quickshell app"
 4. **Fase B**: QML DictatePill (não iniciada)
 5. **Fase C**: testes + README (não iniciada)
 6. **Fase D**: CI + commit + push + tag + rename + delete (não iniciada)
@@ -30,7 +30,7 @@
 
 ### Estratégia: reescrever o arquivo inteiro via Write (não edits incrementais)
 
-Reescrever `bin/whisper_dictate.py` completo com todas as funções. Depois de escrever:
+Reescrever `bin/tabelhawhisper.py` completo com todas as funções. Depois de escrever:
 - `uv run ruff check bin/`
 - `uv run basedpyright bin/`
 
@@ -96,7 +96,7 @@ def cancel(cfg: dict) -> None:
     _kill_force(pids)
     PID_FILE.unlink(missing_ok=True)
 
-    wav = state.get("wav", cfg.get("wav", "/tmp/whisper-dictate.wav"))
+    wav = state.get("wav", cfg.get("wav", "/tmp/tabelhawhisper.wav"))
     with contextlib.suppress(OSError):
         Path(wav).unlink(missing_ok=True)
 
@@ -108,8 +108,8 @@ Inserir entre `watch()` (linha ~239) e `toggle()` (linha ~242).
 
 ### Edits pontuais restantes
 - `bin/whisper_core.py:23` → `"model": "medium"`
-- `config/whisper-dictate.toml.example:4` → `model = "medium"`
-- `config/whisper-dictate.toml.example:10` → `indicator = true          # show the floating pill while recording/transcribing`
+- `config/tabelhawhisper.toml.example:4` → `model = "medium"`
+- `config/tabelhawhisper.toml.example:10` → `indicator = true          # show the floating pill while recording/transcribing`
 
 ---
 
@@ -162,7 +162,7 @@ Espelhar o `recPill` do `screenCaptureToolbar/CaptureToolbar.qml:2994`. O novo W
 
 ## Notas
 
-- O `whisper_dictate.py` reescrito deve ter ~330 linhas (287 atuais + ~40 das 3 funções faltantes)
+- O `tabelhawhisper.py` reescrito deve ter ~330 linhas (287 atuais + ~40 das 3 funções faltantes)
 - O `Widget.qml` reescrito deve ter ~250 linhas (112 atuais + ~140 do DictatePill)
 - Config `indicator` agora é respeitado: python grava no state, pill lê
 - State file ganha campos `wav`, `python`, `script`, `indicator` (backwards compat: defaults se ausentes)

@@ -48,7 +48,7 @@ The installer:
 
 ## Config
 
-Edit `~/.config/tabelha/whisper-dictate/config.toml`:
+Edit `~/.config/tabelha/tabelhawhisper/config.toml`:
 
 ```toml
 model = "small"           # base | small | medium | large-v3

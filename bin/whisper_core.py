@@ -1,16 +1,16 @@
 """Shared helpers for tabelhawhisper: config, model, and the on-disk state file.
 
-The state file at ``/tmp/whisper-dictate.json`` is the single source of truth
-shared between the orchestrator (whisper_dictate), the streaming transcriber
+The state file at ``/tmp/tabelhawhisper.json`` is the single source of truth
+shared between the orchestrator (tabelhawhisper), the streaming transcriber
 (whisper_stream) and the dms pill widget. It always carries at least
 ``state`` (``recording`` | ``paused`` | ``transcribing`` | ``done`` | ``idle`` | ``error``)
 and, while recording, ``start`` (epoch seconds) so the pill can show elapsed time.
 
-Levels are written to a dedicated file (``/tmp/whisper-dictate-levels.json``) by the
+Levels are written to a dedicated file (``/tmp/tabelhawhisper-levels.json``) by the
 wav writer thread or the streaming transcriber, avoiding thread-safety issues with
 the main state file.
 
-History is persisted in ``~/.config/tabelha/whisper-dictate/history.json`` as a
+History is persisted in ``~/.config/tabelha/tabelhawhisper/history.json`` as a
 ring buffer of completed/errored transcriptions.
 """
 
@@ -25,12 +25,12 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-STATE_PATH = Path("/tmp/whisper-dictate.json")
-LEVELS_PATH = Path("/tmp/whisper-dictate-levels.json")
-HISTORY_DIR = Path.home() / ".config" / "tabelha" / "whisper-dictate"
+STATE_PATH = Path("/tmp/tabelhawhisper.json")
+LEVELS_PATH = Path("/tmp/tabelhawhisper-levels.json")
+HISTORY_DIR = Path.home() / ".config" / "tabelha" / "tabelhawhisper"
 HISTORY_PATH = HISTORY_DIR / "history.json"
 CONFIG_PATH = Path(
-    os.environ.get("WHISPER_DICTATE_CONFIG", "~/.config/tabelha/whisper-dictate/config.toml")
+    os.environ.get("TABELHAWHISPER_CONFIG", "~/.config/tabelha/tabelhawhisper/config.toml")
 ).expanduser()
 
 DEFAULTS = {
