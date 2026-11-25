@@ -154,6 +154,7 @@ DEFAULTS = {
     "beam_size": 5,
 }
 
+
 # Replace write_state with atomic version
 def write_state(patch: dict) -> dict:
     state = read_state()
@@ -169,6 +170,7 @@ def write_state(patch: dict) -> dict:
         raise
     return state
 
+
 # Update read_state to log on invalid JSON
 def read_state() -> dict:
     try:
@@ -178,6 +180,7 @@ def read_state() -> dict:
     except json.JSONDecodeError:
         log("read_state: invalid JSON in state file, resetting to idle")
         return {"state": "idle"}
+
 
 # Add write_levels (thread-safe, dedicated file)
 def write_levels(levels: list[float]) -> None:
@@ -191,12 +194,14 @@ def write_levels(levels: list[float]) -> None:
             os.unlink(tmp_path)
         raise
 
+
 # Add read_history
 def read_history() -> dict:
     try:
         return json.loads(HISTORY_PATH.read_text())
     except (FileNotFoundError, json.JSONDecodeError):
         return {"entries": []}
+
 
 # Add write_history (ring buffer, atomic)
 def write_history(entry: dict, history_size: int = 100) -> None:
@@ -219,6 +224,7 @@ Also add `log` import or helper if not present (it's in whisper_dictate.py, not 
 
 ```python
 import sys
+
 
 def log(msg: str) -> None:
     print(f"[whisper_core] {msg}", file=sys.stderr)
@@ -272,8 +278,10 @@ def test_pause_from_idle_is_noop(tmp_path: Path, monkeypatch) -> None:
     write_state({"state": "idle"})
     # Import after monkeypatch
     from whisper_dictate import pause
+
     pause({})
     from whisper_core import read_state
+
     assert read_state()["state"] == "idle"
 
 
@@ -283,9 +291,11 @@ def test_pause_from_recording(tmp_path: Path, monkeypatch) -> None:
     write_state({"state": "recording", "mode": "wav"})
     (tmp_path / "pids.json").write_text(json.dumps({"pids": [99999], "mode": "wav"}))
     from whisper_dictate import pause
+
     with patch("whisper_dictate.os.kill"):  # don't actually signal
         pause({})
     from whisper_core import read_state
+
     assert read_state()["state"] == "paused"
 
 
@@ -293,8 +303,10 @@ def test_resume_from_idle_is_noop(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("whisper_core.STATE_PATH", tmp_path / "state.json")
     write_state({"state": "idle"})
     from whisper_dictate import resume
+
     resume({})
     from whisper_core import read_state
+
     assert read_state()["state"] == "idle"
 
 
@@ -304,9 +316,11 @@ def test_resume_from_paused(tmp_path: Path, monkeypatch) -> None:
     write_state({"state": "paused", "mode": "wav"})
     (tmp_path / "pids.json").write_text(json.dumps({"pids": [99999], "mode": "wav"}))
     from whisper_dictate import resume
+
     with patch("whisper_dictate.os.kill"):
         resume({})
     from whisper_core import read_state
+
     assert read_state()["state"] == "recording"
 ```
 
@@ -446,9 +460,12 @@ def _notify(text: str) -> None:
         subprocess.run(
             [
                 "notify-send",
-                "-u", "low",
-                "-h", "boolean:suppress-sound:true",
-                "-a", "TAbelhaWhisper",
+                "-u",
+                "low",
+                "-h",
+                "boolean:suppress-sound:true",
+                "-a",
+                "TAbelhaWhisper",
                 "Transcrição",
                 text[:500],
             ],
@@ -461,9 +478,16 @@ def _notify(text: str) -> None:
 def _clipboard_store(text: str) -> None:
     subprocess.run(["wl-copy"], input=text.encode(), check=False)
     subprocess.run(
-        ["dms", "ipc", "call", "clipboardService", "store",
-         json.dumps({"data": text, "mimeType": "text/plain;charset=utf-8"})],
-        check=False, capture_output=True,
+        [
+            "dms",
+            "ipc",
+            "call",
+            "clipboardService",
+            "store",
+            json.dumps({"data": text, "mimeType": "text/plain;charset=utf-8"}),
+        ],
+        check=False,
+        capture_output=True,
     )
 
 
@@ -480,6 +504,7 @@ def _set_procname(name: str) -> None:
 def _wav_writer(pipe, wav_path: str, start_ts: int) -> None:
     """Read PCM from pipe, write wav, compute levels to dedicated file."""
     import wave
+
     sample_rate = 16000
     channels = 1
     sample_width = 2
@@ -516,15 +541,17 @@ def start(cfg: dict) -> None:
     ts = int(time.time())
     wav = f"/tmp/whisper-dictate-{ts}.wav"
     mode = cfg.get("mode", "wav")
-    write_state({
-        "state": "recording",
-        "start": ts,
-        "text": "",
-        "mode": mode,
-        "wav": wav,
-        "python": sys.executable,
-        "script": str(SCRIPT_DIR / "whisper_dictate.py"),
-    })
+    write_state(
+        {
+            "state": "recording",
+            "start": ts,
+            "text": "",
+            "mode": mode,
+            "wav": wav,
+            "python": sys.executable,
+            "script": str(SCRIPT_DIR / "whisper_dictate.py"),
+        }
+    )
 
     pw = subprocess.Popen(
         ["pw-record", "--format", "s16", "--rate", "16000", "--channels", "1", "-"],
@@ -534,9 +561,7 @@ def start(cfg: dict) -> None:
     )
 
     if mode == "wav":
-        writer = threading.Thread(
-            target=_wav_writer, args=(pw.stdout, wav, ts), daemon=True
-        )
+        writer = threading.Thread(target=_wav_writer, args=(pw.stdout, wav, ts), daemon=True)
         writer.start()
         pids = [pw.pid]
     else:  # streaming
@@ -593,9 +618,7 @@ def stop(cfg: dict) -> None:
 
     if mode == "wav":
         write_state({"state": "transcribing"})
-        tx_pid = _spawn(
-            [sys.executable, str(SCRIPT_DIR / "whisper_dictate.py"), "transcribe", wav]
-        )
+        tx_pid = _spawn([sys.executable, str(SCRIPT_DIR / "whisper_dictate.py"), "transcribe", wav])
         PID_FILE.write_text(json.dumps({"pids": [tx_pid], "mode": mode}))
     elif mode == "streaming":
         final = read_state()
@@ -607,13 +630,16 @@ def stop(cfg: dict) -> None:
 def _finish(text: str, cfg: dict) -> None:
     state = read_state()
     write_state({"state": "done", "text": text})
-    write_history({
-        "ts": int(time.time()),
-        "mode": state.get("mode"),
-        "state": "done",
-        "text": text,
-        "wav_path": state.get("wav"),
-    }, cfg.get("history_size", 100))
+    write_history(
+        {
+            "ts": int(time.time()),
+            "mode": state.get("mode"),
+            "state": "done",
+            "text": text,
+            "wav_path": state.get("wav"),
+        },
+        cfg.get("history_size", 100),
+    )
     if text.strip():
         if cfg.get("copy_clipboard"):
             _clipboard_store(text)
@@ -664,13 +690,16 @@ def transcribe(wav_path: str) -> None:
     except Exception as e:
         log(f"transcribe error: {e}")
         write_state({"state": "error", "text": f"[error: {e}]"})
-        write_history({
-            "ts": int(time.time()),
-            "mode": read_state().get("mode"),
-            "state": "error",
-            "text": f"[error: {e}]",
-            "wav_path": wav_path,
-        }, cfg.get("history_size", 100))
+        write_history(
+            {
+                "ts": int(time.time()),
+                "mode": read_state().get("mode"),
+                "state": "error",
+                "text": f"[error: {e}]",
+                "wav_path": wav_path,
+            },
+            cfg.get("history_size", 100),
+        )
         return
     _finish(text, cfg)
     log(f"transcribe done textlen={len(text)}")
@@ -781,8 +810,7 @@ def test_levels_written_during_stream(tmp_path: Path, monkeypatch) -> None:
     fake_audio = np.zeros(16000, dtype=np.int16)  # 1s silence
     fake_audio[1000:2000] = 10000  # some signal
 
-    with patch("whisper_stream.get_model") as mock_model, \
-         patch("whisper_stream.sys") as mock_sys:
+    with patch("whisper_stream.get_model") as mock_model, patch("whisper_stream.sys") as mock_sys:
         mock_transcribe = mock_model.return_value.transcribe
         mock_transcribe.return_value = (iter([]), None)
         mock_sys.stdin.buffer.read.side_effect = [fake_audio.tobytes(), b""]
@@ -866,10 +894,14 @@ def main() -> None:
         if time.time() - last >= RETRANSCRIBE_EVERY and buf:
             audio = np.concatenate(buf).astype(np.float32) / 32768.0
             segments, _ = model.transcribe(
-                audio, language=lang, multilingual=multilingual,
-                beam_size=beam_size, vad_filter=True,
+                audio,
+                language=lang,
+                multilingual=multilingual,
+                beam_size=beam_size,
+                vad_filter=True,
                 vad_parameters=vad_parameters,
-                condition_on_previous_text=False, temperature=temperature,
+                condition_on_previous_text=False,
+                temperature=temperature,
             )
             text = "".join(s.text for s in segments).strip()
             write_state({"state": "recording", "text": text})
@@ -879,10 +911,14 @@ def main() -> None:
     if buf:
         audio = np.concatenate(buf).astype(np.float32) / 32768.0
         segments, _ = model.transcribe(
-            audio, language=lang, multilingual=multilingual,
-            beam_size=beam_size, vad_filter=True,
+            audio,
+            language=lang,
+            multilingual=multilingual,
+            beam_size=beam_size,
+            vad_filter=True,
             vad_parameters=vad_parameters,
-            condition_on_previous_text=False, temperature=temperature,
+            condition_on_previous_text=False,
+            temperature=temperature,
         )
         text = "".join(s.text for s in segments).strip()
         write_state({"state": "done", "text": text})
@@ -890,6 +926,7 @@ def main() -> None:
     # Clear levels on completion
     try:
         from whisper_core import LEVELS_PATH
+
         LEVELS_PATH.unlink(missing_ok=True)
     except Exception:
         pass

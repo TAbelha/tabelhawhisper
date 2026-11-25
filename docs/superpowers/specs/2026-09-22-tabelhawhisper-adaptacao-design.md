@@ -206,11 +206,12 @@ def start(cfg: dict) -> None:
 def _wav_writer(stdout_pipe, wav_path, start_ts):
     """Lê PCM do pw-record, escreve wav + calcula levels."""
     import wave, struct
+
     sample_rate = 16000
     channels = 1
     sample_width = 2  # s16le
 
-    with wave.open(wav_path, 'wb') as wf:
+    with wave.open(wav_path, "wb") as wf:
         wf.setnchannels(channels)
         wf.setsampwidth(sample_width)
         wf.setframerate(sample_rate)
@@ -227,8 +228,8 @@ def _wav_writer(stdout_pipe, wav_path, start_ts):
             wf.writeframes(data)
 
             # RMS do chunk
-            samples = struct.unpack(f'<{len(data)//2}h', data)
-            rms = (sum(s*s for s in samples) / len(samples)) ** 0.5
+            samples = struct.unpack(f"<{len(data) // 2}h", data)
+            rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
             level = min(1.0, rms / 32768.0)
             levels.append(level)
             levels = levels[-max_level_samples:]
@@ -279,8 +280,7 @@ def stop(cfg: dict) -> None:
 
     if mode == "wav":
         write_state({"state": "transcribing"})
-        tx_pid = _spawn([sys.executable, str(SCRIPT_DIR / "whisper_dictate.py"),
-                         "transcribe", wav])
+        tx_pid = _spawn([sys.executable, str(SCRIPT_DIR / "whisper_dictate.py"), "transcribe", wav])
         PID_FILE.write_text(json.dumps({"pids": [tx_pid], "mode": mode}))
     elif mode == "streaming":
         final = read_state()
@@ -311,31 +311,45 @@ def _clipboard_store(text: str) -> None:
     subprocess.run(["wl-copy"], input=text.encode(), check=False)
     # Informar DMS via IPC (se disponível)
     subprocess.run(
-        ["dms", "ipc", "call", "clipboardService", "store",
-         json.dumps({"data": text, "mimeType": "text/plain;charset=utf-8"})],
-        check=False, capture_output=True)
+        [
+            "dms",
+            "ipc",
+            "call",
+            "clipboardService",
+            "store",
+            json.dumps({"data": text, "mimeType": "text/plain;charset=utf-8"}),
+        ],
+        check=False,
+        capture_output=True,
+    )
 ```
 
 #### `_write_history()` — novo
 
 ```python
 import tempfile, os
+
 HISTORY_DIR = Path.home() / ".config" / "tabelha" / "whisper-dictate"
 HISTORY_PATH = HISTORY_DIR / "history.json"
+
 
 def _write_history(state: dict, text: str, cfg: dict) -> None:
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
     history = _read_history()
-    entry = {"ts": int(time.time()), "mode": state.get("mode"),
-             "state": state.get("state"), "text": text,
-             "wav_path": state.get("wav")}
+    entry = {
+        "ts": int(time.time()),
+        "mode": state.get("mode"),
+        "state": state.get("state"),
+        "text": text,
+        "wav_path": state.get("wav"),
+    }
     history["entries"].append(entry)
     history_size = cfg.get("history_size", 100)
     history["entries"] = history["entries"][-history_size:]
     # Escrita atômica
     tmp_fd, tmp_path = tempfile.mkstemp(dir=str(HISTORY_DIR))
     try:
-        with os.fdopen(tmp_fd, 'w') as f:
+        with os.fdopen(tmp_fd, "w") as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
         os.replace(tmp_path, str(HISTORY_PATH))
     except:
