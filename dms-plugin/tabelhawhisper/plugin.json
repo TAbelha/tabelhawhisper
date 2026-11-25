@@ -3,7 +3,7 @@
   "name": "TAbelhaWhisper",
   "description": "Voice dictation: record, transcribe with faster-whisper, floating pill with controls and wave bars, transcription history in the bar.",
   "category": "utilities",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "author": "Ian Soares",
   "icon": "mic",
   "type": "composite",
