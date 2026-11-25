@@ -14,18 +14,18 @@ import time
 
 import numpy as np
 
-from whisper_core import get_model, load_config, transcribe_options, write_levels, write_state
+from whisper_core import (
+    LEVELS_PATH,
+    LevelMeter,
+    get_model,
+    load_config,
+    pcm16_rms,
+    transcribe_options,
+    write_levels,
+    write_state,
+)
 
 RETRANSCRIBE_EVERY = 2.0
-
-
-def _compute_levels(chunks: list[np.ndarray]) -> list[float]:
-    """Compute RMS levels from PCM chunks, normalized to 0..1."""
-    levels = []
-    for chunk in chunks:
-        rms = float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))
-        levels.append(min(1.0, rms / 32768.0))
-    return levels[-60:]
 
 
 def main() -> None:
@@ -37,6 +37,7 @@ def main() -> None:
     temperature = [0.0, 0.4, 0.6, 0.8]
 
     buf: list[np.ndarray] = []
+    meter = LevelMeter()
     last = time.time()
     while True:
         data = sys.stdin.buffer.read(4096)
@@ -45,10 +46,8 @@ def main() -> None:
         chunk = np.frombuffer(data, dtype=np.int16)
         buf.append(chunk)
 
-        # Write levels periodically
-        if len(buf) % 8 == 0:
-            with contextlib.suppress(Exception):
-                write_levels(_compute_levels(buf[-20:]))
+        with contextlib.suppress(Exception):
+            write_levels(meter.push(pcm16_rms(data)))
 
         if time.time() - last >= RETRANSCRIBE_EVERY and buf:
             audio = np.concatenate(buf).astype(np.float32) / 32768.0
@@ -83,8 +82,6 @@ def main() -> None:
         write_state({"state": "done", "text": text})
 
     # Clear levels on completion
-    from whisper_core import LEVELS_PATH
-
     with contextlib.suppress(Exception):
         LEVELS_PATH.unlink(missing_ok=True)
 

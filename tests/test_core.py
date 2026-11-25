@@ -5,13 +5,9 @@ from pathlib import Path
 
 from whisper_core import (
     DEFAULTS,
-    HISTORY_PATH,
-    LEVELS_PATH,
-    STATE_PATH,
     load_config,
     read_history,
     read_state,
-    transcribe_options,
     write_history,
     write_levels,
     write_state,
@@ -71,3 +67,24 @@ def test_write_history_ring(tmp_path: Path, monkeypatch) -> None:
     assert len(h["entries"]) == 3
     assert h["entries"][0]["ts"] == 2  # oldest kept
     assert h["entries"][2]["ts"] == 4  # newest
+
+
+def test_write_state_expect_match(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("whisper_core.STATE_PATH", tmp_path / "state.json")
+    write_state({"state": "recording", "wav": "/tmp/a.wav"})
+    result = write_state({"state": "idle"}, expect={"wav": "/tmp/a.wav"})
+    assert result is not None
+    assert read_state()["state"] == "idle"
+
+
+def test_write_state_expect_mismatch(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("whisper_core.STATE_PATH", tmp_path / "state.json")
+    write_state({"state": "recording", "wav": "/tmp/b.wav"})
+    assert write_state({"state": "idle"}, expect={"wav": "/tmp/a.wav"}) is None
+    assert read_state()["state"] == "recording"
+
+
+def test_write_state_uses_lock_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("whisper_core.STATE_PATH", tmp_path / "state.json")
+    write_state({"state": "idle"})
+    assert (tmp_path / "state.lock").exists()

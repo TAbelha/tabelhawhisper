@@ -35,8 +35,39 @@ transcrições. Sem nuvem, sem API keys, tudo roda na sua máquina.
 3. Aperte parar pra finalizar: o faster-whisper transcreve localmente e o
    texto é copiado automaticamente pro clipboard (mais clipboard service do
    DMS e `wl-copy`).
+   No modo wav a gravação entra numa fila, então dá pra começar a próxima na
+   hora; a pílula mostra quantas ainda estão sendo transcritas.
 4. Transcrições passadas ficam no widget de histórico na barra do DMS
    (ring buffer persistente, clique pra expandir e copiar).
+
+As barras de onda seguem a sua voz, não o som de fundo constante: um noise
+gate aprende o piso do ambiente (música nas caixas de som, ventoinha) e só
+mostra o que passa dele. O gate mexe só nas barras, não na transcrição.
+
+## Configuração
+
+`~/.config/tabelha/tabelhawhisper/config.toml` (veja
+[`config/tabelhawhisper.toml.example`](config/tabelhawhisper.toml.example)).
+Além de modelo/idioma/modo:
+
+| Chave | Padrão | O que faz |
+| --- | --- | --- |
+| `save_audio` | `false` | Guarda uma cópia de cada gravação (modo wav). Desligado = nunca salva. |
+| `save_audio_dir` | `""` | Onde salvar; vazio = `~/.local/share/tabelha/tabelhawhisper/recordings`. |
+| `send_to_agent` | `false` | Envia a transcrição pro painel de agente focado no herdr. |
+
+### Enviar pra um agente no herdr
+
+Pare a gravação com `tabelhawhisper.sh --send` (por exemplo num bind
+`Mod+Shift+E`) e a transcrição é digitada no painel de agente do herdr que
+estava focado naquele momento e enviada com Enter, mesmo que você troque de
+janela no meio tempo. O alvo precisa ser uma única janela de terminal com uma
+sessão herdr cujo painel focado seja um agente (Claude, opencode…). Se não
+for, ou se o agente estiver esperando aprovação, o texto fica no clipboard e
+a notificação diz por que não enviou. `--no-send` ignora
+`send_to_agent = true` numa gravação específica.
+
+Cuidado: o niri padrão usa `Mod+Shift+E` pra sair da sessão.
 
 ## Rodando localmente
 

@@ -26,7 +26,7 @@ cat > "$NIRI_SCRIPTS/tabelhawhisper.sh" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 export PATH="\$HOME/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin:\$PATH"
-exec "$REPO/.venv/bin/python" "$REPO/bin/tabelhawhisper.py" toggle
+exec "$REPO/.venv/bin/python" "$REPO/bin/tabelhawhisper.py" toggle "\$@"
 EOF
 chmod +x "$NIRI_SCRIPTS/tabelhawhisper.sh"
 
@@ -55,5 +55,12 @@ fi
 
 echo
 echo "Pronto. A tecla Mod+E grava/transcreve."
+echo
+echo "Opcional: enviar a transcrição pro agente herdr focado (cola + Enter)."
+echo "Adicione no binds do niri (config.kdl):"
+echo "    Mod+Shift+E { spawn \"$NIRI_SCRIPTS/tabelhawhisper.sh\" \"--send\"; }"
+echo "ATENÇÃO: o niri padrão usa Mod+Shift+E pra sair da sessão (quit);"
+echo "troque ou remova esse bind antes, ou escolha outra tecla."
+echo
 echo "Pill flutuante aparece durante gravacao. Widget na barra mostra historico."
 echo "Recarregue o dms e habilite o plugin 'TAbelhaWhisper' nas configs."

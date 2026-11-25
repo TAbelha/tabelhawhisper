@@ -33,8 +33,39 @@ No cloud, no API keys, everything runs on your machine.
    wave bars (real PCM levels from the mic), timer, and controls.
 3. Press stop to finish: faster-whisper transcribes locally and the text is
    auto-copied to the clipboard (plus DMS clipboard service and `wl-copy`).
+   In wav mode the take goes to a queue, so you can start the next one right
+   away; the pill shows how many takes are still transcribing.
 4. Past transcriptions live in a history widget in the DMS bar (persistent
    ring buffer, click to expand and copy).
+
+The wave bars follow your voice, not steady background sound: a noise gate
+learns the room's floor (music from the speakers, fans) and only shows what
+rises above it. The gate affects the bars only, not the transcription.
+
+## Configuration
+
+`~/.config/tabelha/tabelhawhisper/config.toml` (see
+[`config/tabelhawhisper.toml.example`](config/tabelhawhisper.toml.example)).
+Besides model/language/mode:
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `save_audio` | `false` | Keep a copy of each take (wav mode). Off means never saved. |
+| `save_audio_dir` | `""` | Where to save; empty = `~/.local/share/tabelha/tabelhawhisper/recordings`. |
+| `send_to_agent` | `false` | Submit the transcript to the focused herdr agent pane. |
+
+### Send to a herdr agent
+
+Stop with `tabelhawhisper.sh --send` (for example a `Mod+Shift+E` bind) and
+the transcript is typed into the herdr agent pane that was focused at that
+moment and submitted with Enter, even if you switch windows meanwhile. The
+target must be a single terminal window running one herdr session whose
+focused pane is an agent (Claude, opencode…). Otherwise, or if the agent is
+waiting for an approval, the text stays on the clipboard and the notification
+says why it was not sent. `--no-send` overrides `send_to_agent = true` for a
+single take.
+
+Careful: stock niri binds `Mod+Shift+E` to quit the session.
 
 ## Running locally
 

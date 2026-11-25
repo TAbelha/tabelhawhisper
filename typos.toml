@@ -1,3 +1,7 @@
 # Docs are written in pt-BR, so spell-check only code (not markdown).
 [files]
 extend-exclude = ["**/*.md"]
+
+# pt-BR user-facing strings in code (notifications, history).
+[default.extend-words]
+erro = "erro"

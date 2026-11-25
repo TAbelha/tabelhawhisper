@@ -18,10 +18,16 @@ PluginComponent {
     property bool isPaused: false
     property bool isTranscribing: false
     property var levels: []
-    property int startTime: 0
+    property real startTime: 0
+    property real pausedAt: 0
     property int elapsed: 0
     property var stateObj: ({})
     property var levelsObj: ({})
+    property var queueObj: ({})
+    property int queuePending: 0
+    // Last known interpreter/script: the queue can outlive the recorder state.
+    property string cmdPython: "python3"
+    property string cmdScript: ""
     property bool pillVisible: false
 
     // --- Drag state ---
@@ -164,6 +170,23 @@ PluginComponent {
         root.pillY = pillClamp(Math.round(desiredGlobalY - newScreen.y), 4, Math.max(4, newScreen.height - root.pillWindowHeight - 4));
     }
 
+    function runCmd(action) {
+        if (!root.cmdScript)
+            return;
+        Quickshell.execDetached([root.cmdPython, root.cmdScript, action]);
+    }
+
+    function refreshFlags() {
+        var st = (root.stateObj && root.stateObj.state) || "idle";
+        root.isRecording = (st === "recording");
+        root.isPaused = (st === "paused");
+        // "transcribing" in the state file is only the brief wav-finalize window;
+        // afterwards the queue count keeps the transcribing view up.
+        root.isTranscribing = !root.isRecording && !root.isPaused
+            && (st === "transcribing" || root.queuePending > 0);
+        root.pillVisible = root.isRecording || root.isPaused || root.isTranscribing;
+    }
+
     function fmt(sec) {
         sec = Math.max(0, sec | 0);
         var m = Math.floor(sec / 60);
@@ -209,21 +232,47 @@ PluginComponent {
         onTriggered: levelsFile.reload()
     }
 
+    // --- FileView: transcription queue ({"pending": n}) ---
+    FileView {
+        id: queueFile
+        path: "/tmp/tabelhawhisper-queue.json"
+        printErrors: false
+        onLoaded: {
+            try { root.queueObj = JSON.parse(text()); }
+            catch (e) { root.queueObj = {}; }
+        }
+        onLoadFailed: root.queueObj = {}
+    }
+
+    Timer {
+        interval: 500
+        repeat: true
+        running: true
+        onTriggered: queueFile.reload()
+    }
+
+    onQueueObjChanged: {
+        var n = (root.queueObj && root.queueObj.pending) || 0;
+        root.queuePending = Math.max(0, Math.floor(n));
+        root.refreshFlags();
+    }
+
     // Elapsed timer
     Timer {
-        interval: 1000
+        interval: 250
         running: root.isRecording
         repeat: true
         onTriggered: root.elapsed = Math.max(0, Math.floor(Date.now() / 1000 - root.startTime))
     }
 
     onStateObjChanged: {
-        var st = (root.stateObj && root.stateObj.state) || "idle";
-        root.isRecording = (st === "recording");
-        root.isPaused = (st === "paused");
-        root.isTranscribing = (st === "transcribing");
+        if (root.stateObj && root.stateObj.script) {
+            root.cmdScript = root.stateObj.script;
+            root.cmdPython = root.stateObj.python || "python3";
+        }
         root.startTime = (root.stateObj && root.stateObj.start) || 0;
-        root.pillVisible = root.isRecording || root.isPaused || root.isTranscribing;
+        root.pausedAt = (root.stateObj && root.stateObj.paused_at) || 0;
+        root.refreshFlags();
         if (root.pillVisible && !root.pillScreenPersisted) {
             var focused = (typeof CompositorService !== "undefined" && CompositorService.getFocusedScreen)
                 ? CompositorService.getFocusedScreen() : null;
@@ -231,6 +280,8 @@ PluginComponent {
         }
         if (root.isRecording)
             root.elapsed = Math.max(0, Math.floor(Date.now() / 1000 - root.startTime));
+        else if (root.isPaused && root.pausedAt > 0)
+            root.elapsed = Math.max(0, Math.floor(root.pausedAt - root.startTime));
     }
 
     onLevelsObjChanged: {
@@ -403,6 +454,24 @@ PluginComponent {
 
                 Item { Layout.fillWidth: false; width: 8 }
 
+                // Earlier takes still transcribing
+                Rectangle {
+                    visible: root.queuePending > 0
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: Math.max(20, badgeText.implicitWidth + 10)
+                    implicitHeight: 20
+                    radius: 10
+                    color: Theme.withAlpha(Theme.warning, 0.25)
+                    Text {
+                        id: badgeText
+                        anchors.centerIn: parent
+                        text: root.queuePending
+                        font.pixelSize: 11
+                        font.bold: true
+                        color: Theme.surfaceText
+                    }
+                }
+
                 // Pause/Resume button
                 Rectangle {
                     width: 32; height: 32; radius: 8
@@ -418,14 +487,7 @@ PluginComponent {
                         id: pauseArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: {
-                            var script = root.stateObj.script || "";
-                            var python = root.stateObj.python || "python3";
-                            if (root.isPaused)
-                                Quickshell.execDetached([python, script, "resume"]);
-                            else
-                                Quickshell.execDetached([python, script, "pause"]);
-                        }
+                        onClicked: root.runCmd(root.isPaused ? "resume" : "pause")
                     }
                 }
 
@@ -443,11 +505,7 @@ PluginComponent {
                         id: stopArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: {
-                            var script = root.stateObj.script || "";
-                            var python = root.stateObj.python || "python3";
-                            Quickshell.execDetached([python, script, "stop"]);
-                        }
+                        onClicked: root.runCmd("stop")
                     }
                 }
 
@@ -465,11 +523,7 @@ PluginComponent {
                         id: cancelRecArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: {
-                            var script = root.stateObj.script || "";
-                            var python = root.stateObj.python || "python3";
-                            Quickshell.execDetached([python, script, "cancel"]);
-                        }
+                        onClicked: root.runCmd("cancel-recording")
                     }
                 }
             }
@@ -482,21 +536,42 @@ PluginComponent {
                 spacing: 8
                 visible: root.isTranscribing
 
-                // Spinner
-                Text {
-                    text: "\u27f3"
-                    font.pixelSize: 16
-                    color: Theme.warning
-                    RotationAnimation on rotation {
-                        from: 0; to: 360; duration: 1000
+                // Spinner: a fixed-size arc rotated around its own center, so it
+                // spins in place (a rotating glyph wobbles around its ink box).
+                Item {
+                    id: spinner
+                    Layout.preferredWidth: 18
+                    Layout.preferredHeight: 18
+                    Layout.alignment: Qt.AlignVCenter
+                    transformOrigin: Item.Center
+
+                    Canvas {
+                        anchors.fill: parent
+                        property color arcColor: Theme.warning
+                        onArcColorChanged: requestPaint()
+                        onPaint: {
+                            var ctx = getContext("2d");
+                            ctx.reset();
+                            ctx.lineWidth = 2.5;
+                            ctx.lineCap = "round";
+                            ctx.strokeStyle = arcColor;
+                            ctx.beginPath();
+                            ctx.arc(width / 2, height / 2, width / 2 - 2, 0, Math.PI * 1.5);
+                            ctx.stroke();
+                        }
+                    }
+
+                    RotationAnimator on rotation {
+                        from: 0; to: 360; duration: 900
                         loops: Animation.Infinite
-                        running: root.isTranscribing
-                        onRunningChanged: { if (!running) rotation = 0; }
+                        running: root.isTranscribing && pillWindow.visible
                     }
                 }
 
                 Text {
-                    text: "Transcrevendo..."
+                    text: root.queuePending > 1
+                        ? "Transcrevendo... (" + root.queuePending + ")"
+                        : "Transcrevendo..."
                     font.pixelSize: 14
                     color: Theme.surfaceText
                 }
@@ -517,11 +592,7 @@ PluginComponent {
                         id: cancelTxArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: {
-                            var script = root.stateObj.script || "";
-                            var python = root.stateObj.python || "python3";
-                            Quickshell.execDetached([python, script, "cancel"]);
-                        }
+                        onClicked: root.runCmd("cancel-queue")
                     }
                 }
             }
